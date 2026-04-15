@@ -1,0 +1,162 @@
+# chift-cli
+
+OpenAPI-driven CLI for the Chift API.
+
+## Setup
+
+```bash
+uv sync
+uv run chift --help
+uv run chift auth setup
+```
+
+`auth setup` opens an interactive terminal form by default. You can skip the UI with flags:
+
+```bash
+uv run chift auth setup \
+  --account-id <account_id> \
+  --client-id <client_id> \
+  --client-secret <client_secret>
+```
+
+or with environment variables:
+
+```bash
+CHIFT_ACCOUNT_ID=<account_id> \
+CHIFT_CLIENT_ID=<client_id> \
+CHIFT_CLIENT_SECRET=<client_secret> \
+uv run chift auth setup
+```
+
+## Environment
+
+Environment variables are loaded once at process startup through `pydantic-settings`.
+
+Common settings:
+
+```bash
+CHIFT_API_BASE_URL=http://chift.localhost:8000
+CHIFT_OPENAPI_URL=http://chift.localhost:8000/openapi.json
+CHIFT_CONFIG_DIR=/tmp/chift-config
+CHIFT_CACHE_DIR=/tmp/chift-cache
+```
+
+If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
+
+## Schema Cache
+
+The command tree is generated from the OpenAPI schema. On first use, the CLI fetches and caches the schema automatically. You can refresh it manually:
+
+```bash
+uv run chift schema update
+```
+
+Inspect command groups:
+
+```bash
+uv run chift --help
+uv run chift accounting --help
+uv run chift accounting suppliers --help
+```
+
+## Endpoint Inputs
+
+`consumer_id` is treated as route context and can be passed as the first positional value:
+
+```bash
+uv run chift accounting folders list <consumer_id>
+```
+
+Other inputs are passed as normal `KEY=VALUE` values:
+
+```bash
+uv run chift accounting suppliers get <consumer_id> supplier_id=<supplier_id> folder_id=<folder_id>
+```
+
+or with `--param`:
+
+```bash
+uv run chift accounting suppliers get <consumer_id> \
+  --param supplier_id=<supplier_id> \
+  --param folder_id=<folder_id>
+```
+
+The CLI uses the OpenAPI schema to route values internally to path, query, or JSON body fields. Unknown params fail before the request is sent.
+
+Preview a request:
+
+```bash
+uv run chift accounting suppliers get <consumer_id> supplier_id=<supplier_id> --dry-run
+```
+
+If required input is missing, the CLI prints a short usage hint. If endpoint-specific params are also required, it prints one merged JSON schema for those params.
+
+Get only the merged input schema:
+
+```bash
+uv run chift accounting suppliers get --schema
+```
+
+## Output
+
+API commands output JSON by default:
+
+```bash
+uv run chift accounting folders list <consumer_id>
+```
+
+Use YAML when needed:
+
+```bash
+uv run chift accounting folders list <consumer_id> --output yaml
+```
+
+Logs and debug details go to stderr:
+
+```bash
+uv run chift accounting folders list <consumer_id> --debug
+```
+
+`auth setup` is intentionally human-facing: it prints a success message or a plain error message, not JSON.
+
+## Filtering And Fields
+
+`--fields` and `--filter` are client-side output helpers.
+
+```bash
+uv run chift accounting folders list <consumer_id> --fields id,name,parent.id
+uv run chift accounting folders list <consumer_id> --filter name=Sales
+```
+
+`--fields` keeps selected fields after the response is received.
+
+`--filter` filters list responses after the response is received. Multiple filters are ANDed together.
+
+## Schema Search
+
+Search operations in the cached OpenAPI schema:
+
+```bash
+uv run chift schema search supplier
+```
+
+Search is currently substring-based. It checks operation JSON, paths, and summaries. It does not rank results and does not fully resolve component schemas for deep field search yet.
+
+## Feature-Gated Endpoints
+
+Some endpoint groups are hidden from help by default:
+
+- `general`, `datastores`, `syncs`, `issues`, `m-c-p`, `webhooks`
+- `consumers`, `integrations`
+
+Enable internal endpoint groups:
+
+```bash
+CHIFT_SHOW_INTERNAL_ENDPOINTS=1 uv run chift --help
+```
+
+Enable platform endpoint groups:
+
+```bash
+CHIFT_SHOW_PLATFORM_ENDPOINTS=1 uv run chift --help
+```
