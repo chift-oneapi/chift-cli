@@ -1,6 +1,6 @@
 ---
-name: chift-cli-agent
-description: Use when an AI agent needs to operate the chift CLI non-interactively against the Chift API, including authentication, endpoint discovery, schema inspection, feature flags, parameter passing, and output filtering. Prefer this skill whenever the task mentions chift-cli, `chift ...`, Chift API endpoints, or automating Chift CLI calls.
+name: chift-cli
+description: Use when you need to interact with the chift API, including authentication, endpoint discovery, schema inspection, parameter passing, and output filtering. Prefer this skill whenever the task mentions chift-cli, `chift ...`, Chift API endpoints, accounting, pos, pms, banking, invoicing, payment, ecommerce or automating Chift calls.
 ---
 
 # Chift CLI Agent Guide
