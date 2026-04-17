@@ -26,6 +26,14 @@ def test_auth_help_describes_commands() -> None:
     assert "Validate saved API credentials by fetching a fresh token." in result.stdout
 
 
+def test_auth_setup_help_links_to_api_keys() -> None:
+    result = runner.invoke(app, ["auth", "setup", "--help"])
+    normalized_stdout = " ".join(result.stdout.split())
+
+    assert result.exit_code == 0
+    assert "Get an API key at https://chift.app/api-keys." in normalized_stdout
+
+
 def test_auth_check_help_describes_fresh_token_validation() -> None:
     result = runner.invoke(app, ["auth", "check", "--help"])
     normalized_stdout = " ".join(result.stdout.split())

@@ -116,6 +116,15 @@ def prompt_auth_credentials(
                 height=1,
             ),
             Window(FormattedTextControl([("class:rule", "━" * 44)]), height=1),
+            Window(
+                FormattedTextControl(
+                    [
+                        ("class:helper", "Get an API key: "),
+                        ("class:link", "https://chift.app/api-keys"),
+                    ]
+                ),
+                height=1,
+            ),
         ]
     )
     root = HSplit(
@@ -143,6 +152,7 @@ def prompt_auth_credentials(
             "accent": "#04C28F",
             "label": "#F6F6F6 bold",
             "helper": "#F6F6F6",
+            "link": "#88AAFB underline",
             "prompt": "#88AAFB bold",
             "hint": "#88AAFB",
         }

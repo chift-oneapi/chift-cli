@@ -58,6 +58,7 @@ OutputOption = Annotated[
 DebugOption = Annotated[
     bool, typer.Option("--debug", help="Write debug logs to stderr.")
 ]
+CHIFT_API_KEYS_URL = "https://chift.app/api-keys"
 
 
 def parse_allowed_operations(value: str | None) -> set[str] | None:
@@ -299,6 +300,7 @@ def exit_with_error(exc: ChiftCliError) -> None:
     "setup",
     help=(
         "Save API credentials and verify them by fetching a token. "
+        f"Get an API key at {CHIFT_API_KEYS_URL}. "
         "Missing values open an interactive terminal form."
     ),
 )
@@ -322,6 +324,8 @@ def auth_setup(
     debug: DebugOption = False,
 ) -> None:
     """Store Chift API credentials for future CLI calls.
+
+    Get an API key at https://chift.app/api-keys.
 
     Missing values open an interactive terminal form. Pass all credential flags
     or environment variables for non-interactive use.

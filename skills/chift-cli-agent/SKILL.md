@@ -1,6 +1,6 @@
 ---
 name: chift-cli
-description: Use when you need to interact with the chift API, including authentication, endpoint discovery, schema inspection, parameter passing, and output filtering. Prefer this skill whenever the task mentions chift-cli, `chift ...`, Chift API endpoints, accounting, pos, pms, banking, invoicing, payment, ecommerce or automating Chift calls.
+description: Use when you need to interact with the chift API, including authentication, endpoint discovery, schema inspection, parameter passing, and output filtering. Prefer this skill whenever the task mentions chift-cli, `chift ...`, Chift API endpoints, accounting, pos, pms, banking, invoicing, payment, ecommerce, consumer id or automating Chift calls.
 ---
 
 # Chift CLI Agent Guide
@@ -94,6 +94,20 @@ API commands output JSON by default. Use YAML only if requested:
 
 ```bash
 chift accounting folders list <consumer_id> --output yaml
+```
+
+Keep API output small. Prefer endpoint params from `--schema`, small limits, selected fields, and shell tools for aggregate answers:
+
+```bash
+chift accounting suppliers list <consumer_id> --schema
+chift accounting suppliers list <consumer_id> search=acme --fields id,name
+chift accounting suppliers list <consumer_id> --fields id | jq 'length'
+```
+
+For quick existence checks, request only enough to answer:
+
+```bash
+chift accounting suppliers list <consumer_id> search=acme limit=1 --fields id,name
 ```
 
 Use `--fields` to reduce response size after the API response:
