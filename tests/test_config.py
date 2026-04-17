@@ -60,3 +60,11 @@ def test_settings_derive_openapi_url_from_api_base_url(monkeypatch) -> None:
 
     assert settings.api_base_url == "http://chift.localhost:8000"
     assert settings.openapi_url == "http://chift.localhost:8000/openapi.json"
+
+
+def test_settings_reads_allowed_operations_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CHIFT_ALLOWED_OPERATIONS", "get,post")
+
+    settings = config.ChiftSettings()
+
+    assert settings.allowed_operations == "get,post"

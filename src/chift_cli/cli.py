@@ -8,11 +8,20 @@ import typer
 from .auth import fetch_token
 from .auth_form import prompt_auth_credentials
 from .client import execute_operation
-from .config import ApiKeyCredentials, endpoint_visible, save_api_key_credentials
-from .errors import ChiftCliError
+from .config import (
+    ApiKeyCredentials,
+    INTERNAL_ENDPOINT_VERTICALS,
+    PLATFORM_ENDPOINT_VERTICALS,
+    endpoint_visible,
+    load_api_key_credentials,
+    save_api_key_credentials,
+    settings,
+)
+from .errors import AUTHENTICATION_ERROR, ChiftCliError
 from .output import OutputFormat, emit, emit_error
 from .schema import (
     DESTRUCTIVE_METHODS,
+    HTTP_METHODS,
     Operation,
     iter_operations,
     load_schema,
@@ -25,11 +34,13 @@ from .schema import (
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="OpenAPI-driven CLI for the Chift API.",
+    help="CLI for the Chift API.",
     rich_markup_mode=None,
 )
 auth_app = typer.Typer(
-    no_args_is_help=True, help="Authenticate with Chift.", rich_markup_mode=None
+    no_args_is_help=True,
+    help="Configure and validate Chift API credentials.",
+    rich_markup_mode=None,
 )
 schema_app = typer.Typer(
     no_args_is_help=True,
@@ -49,11 +60,52 @@ DebugOption = Annotated[
 ]
 
 
+def parse_allowed_operations(value: str | None) -> set[str] | None:
+    if value is None or not value.strip():
+        return None
+    operations = {item.strip().lower() for item in value.split(",") if item.strip()}
+    if not operations:
+        return None
+    unsupported = sorted(operations - HTTP_METHODS)
+    if unsupported:
+        raise ChiftCliError(
+            f"Unsupported allowed operation `{unsupported[0]}`.",
+            details={
+                "unsupported": unsupported,
+                "accepted": sorted(HTTP_METHODS),
+            },
+        )
+    return operations
+
+
+def configured_allowed_operations() -> set[str] | None:
+    return parse_allowed_operations(settings.allowed_operations)
+
+
+def allowed_operation_filter() -> set[str] | None:
+    try:
+        return configured_allowed_operations()
+    except ChiftCliError:
+        return None
+
+
+def operation_uses_allowed_operations(operation: Operation) -> bool:
+    return operation.vertical not in (
+        INTERNAL_ENDPOINT_VERTICALS | PLATFORM_ENDPOINT_VERTICALS
+    )
+
+
 def visible_operations() -> list[Operation]:
+    allowed_operations = allowed_operation_filter()
     return [
         operation
         for operation in iter_operations(load_schema())
         if endpoint_visible(operation.vertical)
+        and (
+            allowed_operations is None
+            or not operation_uses_allowed_operations(operation)
+            or operation.method.lower() in allowed_operations
+        )
     ]
 
 
@@ -243,7 +295,13 @@ def exit_with_error(exc: ChiftCliError) -> None:
     raise typer.Exit(exc.exit_code) from None
 
 
-@auth_app.command("setup")
+@auth_app.command(
+    "setup",
+    help=(
+        "Save API credentials and verify them by fetching a token. "
+        "Missing values open an interactive terminal form."
+    ),
+)
 def auth_setup(
     account_id: Annotated[
         str | None,
@@ -263,6 +321,11 @@ def auth_setup(
     ] = None,
     debug: DebugOption = False,
 ) -> None:
+    """Store Chift API credentials for future CLI calls.
+
+    Missing values open an interactive terminal form. Pass all credential flags
+    or environment variables for non-interactive use.
+    """
     interactive = not all([account_id, client_id, client_secret])
     if interactive:
         values = prompt_auth_credentials(
@@ -283,6 +346,36 @@ def auth_setup(
         typer.secho(exc.message, err=True, fg=typer.colors.RED)
         raise typer.Exit(exc.exit_code) from None
     typer.secho("Chift authentication configured.", fg=typer.colors.GREEN)
+
+
+@auth_app.command(
+    "check",
+    help=(
+        "Validate saved API credentials by fetching a fresh token. "
+        "This checks Chift accepts the configured credentials instead of only "
+        "inspecting the local token cache."
+    ),
+)
+def auth_check(debug: DebugOption = False) -> None:
+    """Check whether the saved credentials are still accepted by Chift.
+
+    This command uses the configured API credentials and requests a fresh token,
+    so it validates the credentials instead of only inspecting the local cache.
+    """
+    credentials = load_api_key_credentials()
+    if not credentials:
+        typer.secho(
+            "No API credentials found. Run `chift auth setup` first.",
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(AUTHENTICATION_ERROR)
+    try:
+        fetch_token(credentials, debug=debug)
+    except ChiftCliError as exc:
+        typer.secho(exc.message, err=True, fg=typer.colors.RED)
+        raise typer.Exit(exc.exit_code) from None
+    typer.secho("Chift authentication valid.", fg=typer.colors.GREEN)
 
 
 @schema_app.command("update")
@@ -366,24 +459,37 @@ def operation_callback(operation: Operation):
                 "--schema", help="Return this endpoint schema instead of executing it."
             ),
         ] = False,
-        dry_run: Annotated[
-            bool,
-            typer.Option(
-                "--dry-run", "-n", help="Print the request without sending it."
-            ),
-        ] = False,
         force: Annotated[
             bool, typer.Option("--force", help="Required for mutating operations.")
         ] = False,
         output: OutputOption = "json",
         debug: DebugOption = False,
     ) -> None:
+        try:
+            allowed_operations = configured_allowed_operations()
+        except ChiftCliError as exc:
+            exit_with_error(exc)
+        if (
+            allowed_operations is not None
+            and operation_uses_allowed_operations(operation)
+            and operation.method.lower() not in allowed_operations
+        ):
+            exit_with_error(
+                ChiftCliError(
+                    f"Operation {operation.method} is not allowed.",
+                    details={
+                        "method": operation.method,
+                        "path": operation.path,
+                        "allowed": sorted(allowed_operations),
+                    },
+                )
+            )
         if schema:
             emit(_display_schema(input_schema(operation)["json_schema"]), output)
             return
-        if operation.method.lower() in DESTRUCTIVE_METHODS and not (force or dry_run):
+        if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
             raise ChiftCliError(
-                "Mutating operations require --force. Use --dry-run to inspect the request."
+                "Mutating operations require --force."
             )
         merged_params = list(params or [])
         if cursor:
@@ -414,7 +520,6 @@ def operation_callback(operation: Operation):
                 body=body,
                 fields=fields,
                 filters=filters,
-                dry_run=dry_run,
                 debug=debug,
                 input_values=input_values,
             ),

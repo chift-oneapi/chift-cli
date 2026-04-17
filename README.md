@@ -28,6 +28,12 @@ CHIFT_CLIENT_SECRET=<client_secret> \
 uv run chift auth setup
 ```
 
+Check saved credentials without opening the setup form:
+
+```bash
+uv run chift auth check
+```
+
 ## Environment
 
 Environment variables are loaded once at process startup through `pydantic-settings`.
@@ -39,9 +45,12 @@ CHIFT_API_BASE_URL=http://chift.localhost:8000
 CHIFT_OPENAPI_URL=http://chift.localhost:8000/openapi.json
 CHIFT_CONFIG_DIR=/tmp/chift-config
 CHIFT_CACHE_DIR=/tmp/chift-cache
+CHIFT_ALLOWED_OPERATIONS=get,post
 ```
 
 If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
+
+Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of HTTP operations when the CLI should only execute those methods for business vertical endpoints. Supported values are `get`, `post`, `put`, `patch`, and `delete`. For example, `CHIFT_ALLOWED_OPERATIONS=get,post` rejects `put`, `patch`, and `delete` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
 
 ## Schema Cache
 
@@ -83,12 +92,6 @@ uv run chift accounting suppliers get <consumer_id> \
 
 The CLI uses the OpenAPI schema to route values internally to path, query, or JSON body fields. Unknown params fail before the request is sent.
 
-Preview a request:
-
-```bash
-uv run chift accounting suppliers get <consumer_id> supplier_id=<supplier_id> --dry-run
-```
-
 If required input is missing, the CLI prints a short usage hint. If endpoint-specific params are also required, it prints one merged JSON schema for those params.
 
 Get only the merged input schema:
@@ -117,7 +120,7 @@ Logs and debug details go to stderr:
 uv run chift accounting folders list <consumer_id> --debug
 ```
 
-`auth setup` is intentionally human-facing: it prints a success message or a plain error message, not JSON.
+`auth setup` and `auth check` are intentionally human-facing: they print a success message or a plain error message, not JSON.
 
 ## Filtering And Fields
 

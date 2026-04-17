@@ -45,6 +45,7 @@ class ChiftSettings(BaseSettings):
     cache_dir: str | None = None
     show_internal_endpoints: bool = False
     show_platform_endpoints: bool = False
+    allowed_operations: str | None = None
 
 
 settings = ChiftSettings()  # type: ignore[reportCallIssue]

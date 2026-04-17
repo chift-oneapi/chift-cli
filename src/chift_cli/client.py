@@ -99,15 +99,10 @@ def execute_operation(
     body: str | None = None,
     fields: str | None = None,
     filters: list[str] | None = None,
-    dry_run: bool = False,
     debug: bool = False,
     input_values: dict[str, Any] | None = None,
 ) -> Any:
     request = build_request(operation, params=params, body=body, input_values=input_values)
-    if dry_run:
-        scrubbed = dict(request)
-        scrubbed["headers"] = {"authorization": "Bearer ***"}
-        return scrubbed
     token = get_access_token(debug=debug)
     headers = {"Authorization": f"Bearer {token}"}
     try:
