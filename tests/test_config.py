@@ -68,3 +68,19 @@ def test_settings_reads_allowed_operations_from_environment(monkeypatch) -> None
     settings = config.ChiftSettings()
 
     assert settings.allowed_operations == "get,post"
+
+
+def test_settings_default_schema_refresh_interval_is_one_week(monkeypatch) -> None:
+    monkeypatch.delenv("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", raising=False)
+
+    settings = config.ChiftSettings()
+
+    assert settings.schema_refresh_interval_seconds == 7 * 24 * 60 * 60
+
+
+def test_settings_reads_schema_refresh_interval_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", "3600")
+
+    settings = config.ChiftSettings()
+
+    assert settings.schema_refresh_interval_seconds == 3600

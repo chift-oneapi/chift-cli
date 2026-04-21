@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
+DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 INTERNAL_ENDPOINT_VERTICALS = {
     "datastores",
     "general",
@@ -21,7 +22,7 @@ INTERNAL_ENDPOINT_VERTICALS = {
     "m-c-p",
     "webhooks",
 }
-PLATFORM_ENDPOINT_VERTICALS = {"consumers", "integrations"}
+PLATFORM_CONFIG_VERTICALS = {"consumers", "integrations"}
 
 
 class ChiftSettings(BaseSettings):
@@ -44,8 +45,9 @@ class ChiftSettings(BaseSettings):
     config_dir: str | None = None
     cache_dir: str | None = None
     show_internal_endpoints: bool = False
-    show_platform_endpoints: bool = False
+    show_config_endpoints: bool = False
     allowed_operations: str | None = None
+    schema_refresh_interval_seconds: int = DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS
 
 
 settings = ChiftSettings()  # type: ignore[reportCallIssue]
@@ -128,15 +130,15 @@ def show_internal_endpoints() -> bool:
     return settings.show_internal_endpoints
 
 
-def show_platform_endpoints() -> bool:
-    return settings.show_platform_endpoints
+def show_config_endpoints() -> bool:
+    return settings.show_config_endpoints
 
 
 def endpoint_visible(vertical: str) -> bool:
     if vertical in INTERNAL_ENDPOINT_VERTICALS:
         return show_internal_endpoints()
-    if vertical in PLATFORM_ENDPOINT_VERTICALS:
-        return show_platform_endpoints()
+    if vertical in PLATFORM_CONFIG_VERTICALS:
+        return show_config_endpoints()
     return True
 
 

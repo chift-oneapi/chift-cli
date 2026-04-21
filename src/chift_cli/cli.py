@@ -11,7 +11,7 @@ from .client import execute_operation
 from .config import (
     ApiKeyCredentials,
     INTERNAL_ENDPOINT_VERTICALS,
-    PLATFORM_ENDPOINT_VERTICALS,
+    PLATFORM_CONFIG_VERTICALS,
     endpoint_visible,
     load_api_key_credentials,
     save_api_key_credentials,
@@ -92,7 +92,7 @@ def allowed_operation_filter() -> set[str] | None:
 
 def operation_uses_allowed_operations(operation: Operation) -> bool:
     return operation.vertical not in (
-        INTERNAL_ENDPOINT_VERTICALS | PLATFORM_ENDPOINT_VERTICALS
+        INTERNAL_ENDPOINT_VERTICALS | PLATFORM_CONFIG_VERTICALS
     )
 
 
@@ -492,9 +492,7 @@ def operation_callback(operation: Operation):
             emit(_display_schema(input_schema(operation)["json_schema"]), output)
             return
         if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
-            raise ChiftCliError(
-                "Mutating operations require --force."
-            )
+            raise ChiftCliError("Mutating operations require --force.")
         merged_params = list(params or [])
         if cursor:
             merged_params.append(f"cursor={cursor}")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,12 +10,14 @@ from typing import Any, Iterable
 
 import httpx
 
-from .config import get_openapi_url, schema_path
+from .config import get_openapi_url, schema_path, settings
 from .errors import RetryRecommendedError
 
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
+_BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()
+_BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
 
 
 BUILTIN_SCHEMA: dict[str, Any] = {
@@ -80,6 +83,12 @@ class Operation:
     components: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
 
+@dataclass(frozen=True)
+class OperationClassification:
+    vertical: str
+    entity: str
+
+
 def slugify(value: str) -> str:
     value = value.replace("_", "-")
     value = re.sub(r"(?<!^)(?=[A-Z])", "-", value).lower()
@@ -90,7 +99,9 @@ def slugify(value: str) -> str:
 def load_schema() -> dict[str, Any]:
     path = schema_path()
     if path.exists():
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
+        refresh_schema_in_background_if_stale()
+        return data
     try:
         _, data = update_schema()
         return data
@@ -115,6 +126,49 @@ def update_schema(*, timeout: float = 30.0) -> tuple[Path, dict[str, Any]]:
         raise RetryRecommendedError("Could not update the Chift OpenAPI schema.", details={"url": url, "reason": str(exc)}) from exc
     data = response.json()
     return save_schema(data), data
+
+
+def _schema_refresh_interval_seconds() -> int:
+    return max(settings.schema_refresh_interval_seconds, 0)
+
+
+def schema_refresh_is_due(age_seconds: int | None = None) -> bool:
+    age = schema_age_seconds() if age_seconds is None else age_seconds
+    interval = _schema_refresh_interval_seconds()
+    return age is not None and interval > 0 and age >= interval
+
+
+def _background_schema_refresh_worker(timeout: float) -> None:
+    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
+    try:
+        update_schema(timeout=timeout)
+    except Exception:
+        pass
+    finally:
+        with _BACKGROUND_SCHEMA_REFRESH_LOCK:
+            _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
+
+
+def start_background_schema_refresh(*, timeout: float = 30.0) -> bool:
+    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
+    with _BACKGROUND_SCHEMA_REFRESH_LOCK:
+        if _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS:
+            return False
+        _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = True
+    thread = threading.Thread(
+        target=_background_schema_refresh_worker,
+        args=(timeout,),
+        name="chift-schema-refresh",
+        daemon=True,
+    )
+    thread.start()
+    return True
+
+
+def refresh_schema_in_background_if_stale() -> bool:
+    if not schema_refresh_is_due():
+        return False
+    return start_background_schema_refresh()
 
 
 def schema_age_seconds() -> int | None:
@@ -145,23 +199,69 @@ def has_read_scope(scopes: tuple[str, ...]) -> bool:
     return any(scope.split(".")[-1] == "read" for scope in scopes)
 
 
-def entity_from_scopes(vertical: str, scopes: tuple[str, ...]) -> str | None:
-    candidates: list[tuple[int, str]] = []
+def classification_from_tags(operation: dict[str, Any]) -> OperationClassification | None:
+    tags = [
+        slugify(tag)
+        for tag in operation.get("tags") or []
+        if isinstance(tag, str) and tag.strip()
+    ]
+    if len(tags) < 2:
+        return None
+    return OperationClassification(vertical=tags[0], entity=tags[1])
+
+
+def classification_from_scopes(scopes: tuple[str, ...]) -> OperationClassification | None:
+    candidates: dict[tuple[str, str], tuple[int, int]] = {}
     for scope in scopes:
         parts = scope.split(".")
-        if len(parts) < 2:
+        if len(parts) < 3 or not parts[0] or not any(parts[1:-1]):
             continue
-        entity = parts[-2] if len(parts) > 2 else parts[-1]
-        if slugify(entity) == vertical:
-            continue
-        candidates.append((len(parts), slugify(entity)))
+        vertical = slugify(parts[0])
+        entity = slugify(".".join(parts[1:-1]))
+        count, specificity = candidates.get((vertical, entity), (0, 0))
+        candidates[(vertical, entity)] = (count + 1, max(specificity, len(parts)))
     if not candidates:
         return None
-    return sorted(candidates, reverse=True)[0][1]
+    (vertical, entity), _ = sorted(
+        candidates.items(),
+        key=lambda item: (-item[1][0], -item[1][1], item[0][0], item[0][1]),
+    )[0]
+    return OperationClassification(vertical=vertical, entity=entity)
 
 
-def entity_name(path: str, vertical: str, scopes: tuple[str, ...]) -> str:
-    return entity_from_scopes(vertical, scopes) or entity_from_path(path)
+def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]) -> OperationClassification | None:
+    tags = [
+        slugify(tag)
+        for tag in operation.get("tags") or []
+        if isinstance(tag, str) and tag.strip()
+    ]
+    if len(tags) != 1:
+        return None
+    return OperationClassification(vertical=tags[0], entity=entity_from_path(path))
+
+
+def classification_from_path(path: str) -> OperationClassification:
+    parts = [
+        slugify(part)
+        for part in path.strip("/").split("/")
+        if part and not part.startswith("{")
+    ]
+    if not parts:
+        return OperationClassification(vertical="root", entity="root")
+    if len(parts) == 1:
+        return OperationClassification(vertical=parts[0], entity=parts[0])
+    if parts[0] == "consumers" and len(parts) >= 3:
+        return OperationClassification(vertical=parts[1], entity=parts[-1])
+    return OperationClassification(vertical=parts[0], entity=parts[-1])
+
+
+def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
+    return (
+        classification_from_scopes(scopes)
+        or classification_from_tags(operation)
+        or classification_from_single_tag_and_path(path, operation)
+        or classification_from_path(path)
+    )
 
 
 def resolve_ref(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, Any]:
@@ -231,9 +331,10 @@ def iter_operations(schema: dict[str, Any] | None = None) -> list[Operation]:
         for method, operation in sorted(methods.items()):
             if method not in HTTP_METHODS:
                 continue
-            vertical = slugify((operation.get("tags") or ["general"])[0])
             scopes = extract_scopes(operation)
-            entity = entity_name(path, vertical, scopes)
+            classification = classify_operation(path, operation, scopes)
+            vertical = classification.vertical
+            entity = classification.entity
             key = (vertical, entity)
             used.setdefault(key, set())
             command = command_name(method, path, operation, scopes, data, used[key])
