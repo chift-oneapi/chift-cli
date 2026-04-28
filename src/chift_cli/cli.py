@@ -461,7 +461,7 @@ def operation_callback(operation: Operation):
             emit(_display_schema(input_schema(operation)["json_schema"]), output)
             return
         if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
-            raise ChiftCliError("Mutating operations require --force.")
+            exit_with_error(ChiftCliError("Mutating operations require --force."))
         merged_params = list(params or [])
         if cursor:
             merged_params.append(f"cursor={cursor}")

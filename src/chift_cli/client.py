@@ -11,6 +11,8 @@ from .errors import AuthenticationError, ChiftCliError, RetryRecommendedError
 from .pathing import path_parameter_names
 from .schema import Operation
 
+_MISSING = object()
+
 
 def parse_key_value(values: list[str] | None) -> dict[str, str]:
     result: dict[str, str] = {}
@@ -47,7 +49,12 @@ def build_request(operation: Operation, *, params: list[str] | None, body: str |
                 details={"parameter": name, "path": operation.path, "example": f"--param {name}=..."},
             )
         path = path.replace("{" + name + "}", str(all_inputs.pop(name)))
-    query = {key: value for key, value in all_inputs.items() if key in query_names or key in all_params and not operation.raw.get("requestBody")}
+    query = {
+        key: value
+        for key, value in all_inputs.items()
+        if key in query_names
+        or (key in all_params and not operation.raw.get("requestBody"))
+    }
     body_inputs = {key: value for key, value in all_inputs.items() if key not in query}
     request_body = parse_json_body(body)
     if body_inputs and isinstance(request_body, dict):
@@ -70,14 +77,19 @@ def apply_fields(data: Any, fields: str | None) -> Any:
         return [apply_fields(item, fields) for item in data]
     if not isinstance(data, dict):
         return data
-    return {field: _nested_get(data, field) for field in wanted if _nested_get(data, field) is not None}
+    filtered: dict[str, Any] = {}
+    for field in wanted:
+        value = _nested_get(data, field, default=_MISSING)
+        if value is not _MISSING:
+            filtered[field] = value
+    return filtered
 
 
-def _nested_get(data: dict[str, Any], field: str) -> Any:
+def _nested_get(data: dict[str, Any], field: str, *, default: Any = None) -> Any:
     current: Any = data
     for part in field.split("."):
         if not isinstance(current, dict) or part not in current:
-            return None
+            return default
         current = current[part]
     return current
 

@@ -118,6 +118,24 @@ def test_operation_rejects_unknown_param_option() -> None:
     assert "consumer_id" not in payload["error"]["details"]
 
 
+def test_operation_requires_force_with_structured_error_output() -> None:
+    operation = _operation(
+        "accounting",
+        "DELETE",
+        "/consumers/{consumer_id}/accounting/clients/{client_id}",
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["consumer-123", "client_id=client-456"],
+    )
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stderr)
+    assert payload["error"]["message"] == "Mutating operations require --force."
+    assert payload["error"]["type"] == "ChiftCliError"
+
+
 def test_allowed_operations_allows_configured_vertical_methods(monkeypatch) -> None:
     monkeypatch.setattr(config.settings, "allowed_operations", "post")
     operation = _operation(

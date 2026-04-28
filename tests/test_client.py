@@ -39,6 +39,14 @@ def test_apply_fields_supports_nested_fields() -> None:
     assert apply_fields(data, "id,nested.name") == {"id": "1", "nested.name": "Acme"}
 
 
+def test_apply_fields_keeps_explicit_none_values() -> None:
+    data = {"id": "1", "deleted_at": None}
+    assert apply_fields(data, "id,deleted_at,missing") == {
+        "id": "1",
+        "deleted_at": None,
+    }
+
+
 def test_apply_filter_keeps_matching_items() -> None:
     data = [{"name": "Acme"}, {"name": "Other"}]
     assert apply_filter(data, ["name=Acme"]) == [{"name": "Acme"}]
