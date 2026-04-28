@@ -8,6 +8,7 @@ import httpx
 from .auth import get_access_token
 from .config import get_api_base_url
 from .errors import AuthenticationError, ChiftCliError, RetryRecommendedError
+from .pathing import path_parameter_names
 from .schema import Operation
 
 
@@ -30,10 +31,6 @@ def parse_json_body(value: str | None) -> Any:
         raise ChiftCliError("Invalid JSON body.", details={"reason": str(exc)}) from exc
 
 
-def _path_parameter_names(path: str) -> list[str]:
-    return [part[1:-1] for part in path.split("/") if part.startswith("{") and part.endswith("}")]
-
-
 def _query_parameter_names(operation: Operation) -> set[str]:
     return {parameter["name"] for parameter in operation.raw.get("parameters", []) if parameter.get("in") == "query" and "name" in parameter}
 
@@ -43,7 +40,7 @@ def build_request(operation: Operation, *, params: list[str] | None, body: str |
     all_inputs = {**(input_values or {}), **all_params}
     query_names = _query_parameter_names(operation)
     path = operation.path
-    for name in _path_parameter_names(path):
+    for name in path_parameter_names(path):
         if name not in all_inputs:
             raise ChiftCliError(
                 f"Missing path parameter `{name}`. Pass it with `--param {name}=...`.",

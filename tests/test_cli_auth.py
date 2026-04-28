@@ -3,7 +3,7 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from chift_cli import config
-from chift_cli.auth_form import AuthFormValues
+from chift_cli.auth_form import AuthFormValues, normalize_auth_form_values
 from chift_cli.cli import app
 from chift_cli.config import (
     ApiKeyCredentials,
@@ -157,3 +157,15 @@ def test_auth_check_requires_saved_credentials(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 3
     assert result.stdout == ""
     assert result.stderr == "No API credentials found. Run `chift auth setup` first.\n"
+
+
+def test_auth_form_normalizes_all_fields() -> None:
+    assert normalize_auth_form_values(
+        account_id=" acct ",
+        client_id=" client ",
+        client_secret=" secret \n",
+    ) == AuthFormValues(
+        account_id="acct",
+        client_id="client",
+        client_secret="secret",
+    )

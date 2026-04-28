@@ -18,6 +18,19 @@ class AuthFormValues:
     client_secret: str
 
 
+def normalize_auth_form_values(
+    *,
+    account_id: str,
+    client_id: str,
+    client_secret: str,
+) -> AuthFormValues:
+    return AuthFormValues(
+        account_id=account_id.strip(),
+        client_id=client_id.strip(),
+        client_secret=client_secret.strip(),
+    )
+
+
 def _label(title: str, helper: str) -> HSplit:
     return HSplit(
         [
@@ -80,9 +93,9 @@ def prompt_auth_credentials(
             application.layout.focus(missing)
             return
         application.exit(
-            result=AuthFormValues(
-                account_id=account.text.strip(),
-                client_id=client.text.strip(),
+            result=normalize_auth_form_values(
+                account_id=account.text,
+                client_id=client.text,
                 client_secret=secret.text,
             )
         )

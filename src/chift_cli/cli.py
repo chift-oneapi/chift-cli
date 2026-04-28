@@ -19,6 +19,7 @@ from .config import (
 )
 from .errors import AUTHENTICATION_ERROR, ChiftCliError
 from .output import OutputFormat, emit, emit_error
+from .pathing import path_parameter_names
 from .schema import (
     DESTRUCTIVE_METHODS,
     HTTP_METHODS,
@@ -110,14 +111,6 @@ def visible_operations() -> list[Operation]:
     ]
 
 
-def _path_parameter_names(path: str) -> list[str]:
-    return [
-        part[1:-1]
-        for part in path.split("/")
-        if part.startswith("{") and part.endswith("}")
-    ]
-
-
 def _provided_parameters(params: list[str] | None) -> set[str]:
     return {value.split("=", 1)[0] for value in params or [] if "=" in value}
 
@@ -143,7 +136,7 @@ def _input_values_from_args(
             values[key] = value
         else:
             unnamed.append(item)
-    path_names = _path_parameter_names(operation.path)
+    path_names = path_parameter_names(operation.path)
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
     for name, value in zip(missing_path_names, unnamed):
@@ -215,30 +208,6 @@ def input_schema(operation: Operation) -> dict[str, Any]:
     if required:
         schema["required"] = required
     return {"json_schema": schema, "routing": routing}
-
-
-def endpoint_schema(operation: Operation) -> dict:
-    inputs = input_schema(operation)
-    return {
-        "endpoint": {
-            "vertical": operation.vertical,
-            "entity": operation.entity,
-            "command": operation.command,
-            "method": operation.method,
-            "path": operation.path,
-            "summary": operation.summary,
-            "operation_id": operation.operation_id,
-            "scopes": list(operation.scopes),
-        },
-        "input": inputs,
-        "usage": {
-            "params": "--param field=value",
-            "consumer_id": "You can pass consumer_id as the first argument.",
-            "filters": "--filter field=value",
-            "fields": "--fields field1,nested.field",
-        },
-        "responses": operation.raw.get("responses"),
-    }
 
 
 def _input_usage(operation: Operation, schema: dict[str, Any]) -> str:

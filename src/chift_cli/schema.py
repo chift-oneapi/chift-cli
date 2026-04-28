@@ -6,7 +6,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import httpx
 
@@ -398,14 +398,3 @@ def search_schema(query: str, schema: dict[str, Any] | None = None) -> list[dict
                 }
             )
     return matches
-
-
-def filter_by_scopes(operations: Iterable[Operation], scopes: set[str] | None) -> list[Operation]:
-    if not scopes:
-        return list(operations)
-    result = []
-    for operation in operations:
-        needed = set(operation.scopes)
-        if not needed or needed & scopes:
-            result.append(operation)
-    return result

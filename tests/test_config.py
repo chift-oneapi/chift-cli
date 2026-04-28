@@ -70,6 +70,14 @@ def test_settings_reads_allowed_operations_from_environment(monkeypatch) -> None
     assert settings.allowed_operations == "get,post"
 
 
+def test_settings_reads_platform_visibility_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CHIFT_SHOW_PLATFORM_ENDPOINTS", "1")
+
+    settings = config.ChiftSettings()
+
+    assert settings.show_platform_endpoints is True
+
+
 def test_settings_default_schema_refresh_interval_is_one_week(monkeypatch) -> None:
     monkeypatch.delenv("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", raising=False)
 
