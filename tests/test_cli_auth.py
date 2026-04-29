@@ -119,6 +119,33 @@ def test_auth_setup_errors_are_plain_text(monkeypatch, tmp_path) -> None:
     assert result.stderr == "Invalid Chift credentials.\n"
 
 
+def test_auth_setup_does_not_save_credentials_when_validation_fails(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(config.settings, "config_dir", str(tmp_path))
+
+    def fake_fetch_token(credentials, *, debug=False):
+        raise AuthenticationError("Invalid Chift credentials.")
+
+    monkeypatch.setattr("chift_cli.cli.fetch_token", fake_fetch_token)
+    result = runner.invoke(
+        app,
+        [
+            "auth",
+            "setup",
+            "--account-id",
+            "acct",
+            "--client-id",
+            "bad",
+            "--client-secret",
+            "bad",
+        ],
+    )
+
+    assert result.exit_code == 3
+    assert load_api_key_credentials() is None
+
+
 def test_auth_check_refreshes_token_with_saved_credentials(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config.settings, "config_dir", str(tmp_path))
     save_api_key_credentials(

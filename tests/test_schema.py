@@ -169,6 +169,57 @@ def test_operation_classification_prefers_scopes_over_two_tags() -> None:
     assert operation.scopes == ("banking.accounts.read",)
 
 
+def test_operation_classification_unifies_two_part_and_three_part_scopes() -> None:
+    schema = {
+        "paths": {
+            "/consumers/{consumer_id}/pos/customers": {
+                "get": {
+                    "tags": ["Point of Sale", "Customers"],
+                    "summary": "List customers",
+                    "operationId": "pos_list_customers",
+                    "security": [
+                        {
+                            "mcp_auth": [
+                                "pos",
+                                "pos.customers",
+                                "pos.customers.read",
+                                "pos.read",
+                            ]
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {"type": "array", "items": {"type": "object"}}
+                                }
+                            }
+                        }
+                    },
+                },
+                "post": {
+                    "tags": ["Point of Sale", "Customers"],
+                    "summary": "Create customer",
+                    "operationId": "pos_create_customer",
+                    "security": [{"mcp_auth": ["pos", "pos.customers"]}],
+                    "responses": {
+                        "200": {
+                            "content": {"application/json": {"schema": {"type": "object"}}}
+                        }
+                    },
+                },
+            }
+        }
+    }
+    list_op = find_operation("pos", "customers", "list", schema)
+    create_op = find_operation("pos", "customers", "create", schema)
+
+    assert list_op is not None
+    assert create_op is not None
+    assert (list_op.vertical, list_op.entity) == ("pos", "customers")
+    assert (create_op.vertical, create_op.entity) == ("pos", "customers")
+
+
 def test_operation_classification_falls_back_to_path_without_tags_or_scopes() -> None:
     operation = find_operation("payment", "transactions", "list", SAMPLE_SCHEMA)
 

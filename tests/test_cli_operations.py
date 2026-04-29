@@ -256,6 +256,36 @@ def test_visible_operations_filters_by_allowed_operations(monkeypatch) -> None:
     assert consumer_methods == {"DELETE"}
 
 
+def test_operation_rejects_extra_positional_arguments() -> None:
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/suppliers/{supplier_id}",
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["consumer-1", "supplier-2", "stray-extra", "another-extra"],
+    )
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stderr)
+    assert payload["error"]["message"].startswith(
+        "Unexpected positional argument `stray-extra`."
+    )
+    assert payload["error"]["details"]["extras"] == ["stray-extra", "another-extra"]
+
+
+def test_cursor_limit_and_all_options_are_removed() -> None:
+    result = runner.invoke(app, ["consumers", "consumers", "delete", "--help"])
+
+    assert result.exit_code == 0
+    assert "--cursor" not in result.stdout
+    assert "--limit" not in result.stdout
+    assert "--all " not in result.stdout
+    assert "--all\n" not in result.stdout
+
+
 def test_display_schema_keeps_non_consumer_params() -> None:
     schema = {
         "type": "object",

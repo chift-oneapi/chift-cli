@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from .errors import RetryRecommendedError
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
+SCOPE_ACTION_PARTS = {"read", "write"}
 _BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()
 _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
 
@@ -105,8 +107,12 @@ def load_schema() -> dict[str, Any]:
     try:
         _, data = update_schema()
         return data
-    except RetryRecommendedError:
-        pass
+    except RetryRecommendedError as exc:
+        print(
+            f"chift: could not fetch OpenAPI schema ({exc.message}); "
+            "using minimal built-in schema. Run `chift schema update` once the API is reachable.",
+            file=sys.stderr,
+        )
     return BUILTIN_SCHEMA
 
 
@@ -214,10 +220,16 @@ def classification_from_scopes(scopes: tuple[str, ...]) -> OperationClassificati
     candidates: dict[tuple[str, str], tuple[int, int]] = {}
     for scope in scopes:
         parts = scope.split(".")
-        if len(parts) < 3 or not parts[0] or not any(parts[1:-1]):
+        if len(parts) < 2 or not parts[0]:
+            continue
+        if parts[-1] in SCOPE_ACTION_PARTS:
+            entity_parts = parts[1:-1]
+        else:
+            entity_parts = parts[1:]
+        if not entity_parts or not any(entity_parts):
             continue
         vertical = slugify(parts[0])
-        entity = slugify(".".join(parts[1:-1]))
+        entity = slugify(".".join(entity_parts))
         count, specificity = candidates.get((vertical, entity), (0, 0))
         candidates[(vertical, entity)] = (count + 1, max(specificity, len(parts)))
     if not candidates:
