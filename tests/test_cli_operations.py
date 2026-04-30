@@ -6,14 +6,22 @@ import typer
 from typer.testing import CliRunner
 
 from chift_cli import config
-from chift_cli.cli import _display_schema, app, operation_callback, visible_operations
+from chift_cli.cli import (
+    _display_schema,
+    app,
+    operation_allowed_class,
+    operation_callback,
+    visible_operations,
+)
 from chift_cli.schema import Operation
 
 
 runner = CliRunner()
 
 
-def _operation(vertical: str, method: str, path: str) -> Operation:
+def _operation(
+    vertical: str, method: str, path: str, scopes: tuple[str, ...] = ()
+) -> Operation:
     parameters = [
         {
             "name": part[1:-1],
@@ -32,7 +40,7 @@ def _operation(vertical: str, method: str, path: str) -> Operation:
         path=path,
         operation_id="",
         summary="",
-        scopes=(),
+        scopes=scopes,
         raw={"parameters": parameters},
     )
 
@@ -136,8 +144,8 @@ def test_operation_requires_force_with_structured_error_output() -> None:
     assert payload["error"]["type"] == "ChiftCliError"
 
 
-def test_allowed_operations_allows_configured_vertical_methods(monkeypatch) -> None:
-    monkeypatch.setattr(config.settings, "allowed_operations", "post")
+def test_allowed_operations_allows_configured_vertical_classes(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "allowed_operations", "write")
     operation = _operation(
         "accounting",
         "POST",
@@ -154,8 +162,8 @@ def test_allowed_operations_allows_configured_vertical_methods(monkeypatch) -> N
     assert payload["properties"] == {}
 
 
-def test_allowed_operations_rejects_unconfigured_vertical_methods(monkeypatch) -> None:
-    monkeypatch.setattr(config.settings, "allowed_operations", "get,post")
+def test_allowed_operations_rejects_unconfigured_vertical_classes(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "allowed_operations", "read,write")
     operation = _operation(
         "accounting",
         "DELETE",
@@ -169,16 +177,17 @@ def test_allowed_operations_rejects_unconfigured_vertical_methods(monkeypatch) -
 
     assert result.exit_code == 2
     payload = json.loads(result.stderr)
-    assert payload["error"]["message"] == "Operation DELETE is not allowed."
+    assert payload["error"]["message"] == "Operation class `dangerous` is not allowed."
     assert payload["error"]["details"] == {
-        "allowed": ["get", "post"],
+        "allowed": ["read", "write"],
+        "class": "dangerous",
         "method": "DELETE",
         "path": "/consumers/{consumer_id}/accounting/clients/{client_id}",
     }
 
 
 def test_allowed_operations_does_not_restrict_platform_methods(monkeypatch) -> None:
-    monkeypatch.setattr(config.settings, "allowed_operations", "get,post")
+    monkeypatch.setattr(config.settings, "allowed_operations", "read,write")
 
     result = runner.invoke(
         app,
@@ -190,7 +199,7 @@ def test_allowed_operations_does_not_restrict_platform_methods(monkeypatch) -> N
     assert payload == {"additionalProperties": False, "properties": {}, "type": "object"}
 
 
-def test_allowed_operations_rejects_unsupported_methods(monkeypatch) -> None:
+def test_allowed_operations_rejects_unsupported_classes(monkeypatch) -> None:
     monkeypatch.setattr(config.settings, "allowed_operations", "get,fetch")
 
     result = runner.invoke(
@@ -201,7 +210,7 @@ def test_allowed_operations_rejects_unsupported_methods(monkeypatch) -> None:
     assert result.exit_code == 2
     payload = json.loads(result.stderr)
     assert payload["error"]["message"] == "Unsupported allowed operation `fetch`."
-    assert payload["error"]["details"]["unsupported"] == ["fetch"]
+    assert payload["error"]["details"]["unsupported"] == ["fetch", "get"]
 
 
 def test_allowed_operations_is_not_a_cli_flag() -> None:
@@ -218,7 +227,7 @@ def test_dry_run_is_not_an_operation_flag() -> None:
     assert "--dry-run" not in result.stdout
 
 
-def test_visible_operations_filters_by_allowed_operations(monkeypatch) -> None:
+def test_visible_operations_filters_by_allowed_operation_classes(monkeypatch) -> None:
     schema = {
         "paths": {
             "/consumers/{consumer_id}": {
@@ -240,7 +249,7 @@ def test_visible_operations_filters_by_allowed_operations(monkeypatch) -> None:
             },
         }
     }
-    monkeypatch.setattr(config.settings, "allowed_operations", "post")
+    monkeypatch.setattr(config.settings, "allowed_operations", "write")
     monkeypatch.setattr(config.settings, "show_platform_endpoints", True)
     monkeypatch.setattr("chift_cli.cli.load_schema", lambda: schema)
 
@@ -254,6 +263,76 @@ def test_visible_operations_filters_by_allowed_operations(monkeypatch) -> None:
 
     assert accounting_methods == {"POST"}
     assert consumer_methods == {"DELETE"}
+
+
+def test_allowed_operations_all_allows_vertical_classes(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "allowed_operations", "all")
+    operation = _operation(
+        "accounting",
+        "DELETE",
+        "/consumers/{consumer_id}/accounting/clients/{client_id}",
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["--schema"],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_operation_allowed_class_uses_read_scopes_before_method() -> None:
+    operation = _operation(
+        "accounting",
+        "POST",
+        "/consumers/{consumer_id}/accounting/reports",
+        scopes=("accounting.reports.read",),
+    )
+
+    assert operation_allowed_class(operation) == "read"
+
+
+def test_operation_allowed_class_uses_broad_scopes_before_method() -> None:
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/reports",
+        scopes=("accounting.reports",),
+    )
+
+    assert operation_allowed_class(operation) == "write"
+
+
+def test_operation_allowed_class_treats_broad_scoped_delete_as_dangerous() -> None:
+    operation = _operation(
+        "accounting",
+        "DELETE",
+        "/consumers/{consumer_id}/accounting/reports/{report_id}",
+        scopes=("accounting.reports",),
+    )
+
+    assert operation_allowed_class(operation) == "dangerous"
+
+
+def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> None:
+    assert (
+        operation_allowed_class(
+            _operation("accounting", "OPTIONS", "/consumers/{consumer_id}/accounting")
+        )
+        == "read"
+    )
+    assert (
+        operation_allowed_class(
+            _operation("accounting", "PATCH", "/consumers/{consumer_id}/accounting")
+        )
+        == "write"
+    )
+    assert (
+        operation_allowed_class(
+            _operation("accounting", "DELETE", "/consumers/{consumer_id}/accounting")
+        )
+        == "dangerous"
+    )
 
 
 def test_operation_rejects_extra_positional_arguments() -> None:

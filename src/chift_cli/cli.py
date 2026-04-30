@@ -22,7 +22,6 @@ from .output import OutputFormat, emit, emit_error
 from .pathing import path_parameter_names
 from .schema import (
     DESTRUCTIVE_METHODS,
-    HTTP_METHODS,
     Operation,
     iter_operations,
     load_schema,
@@ -60,6 +59,10 @@ DebugOption = Annotated[
     bool, typer.Option("--debug", help="Write debug logs to stderr.")
 ]
 CHIFT_API_KEYS_URL = "https://chift.app/api-keys"
+ALLOWED_OPERATION_CLASSES = {"all", "dangerous", "read", "write"}
+READ_METHODS = {"get", "head", "options"}
+WRITE_METHODS = {"patch", "post", "put"}
+DANGEROUS_METHODS = {"delete"}
 
 
 def parse_allowed_operations(value: str | None) -> set[str] | None:
@@ -68,15 +71,17 @@ def parse_allowed_operations(value: str | None) -> set[str] | None:
     operations = {item.strip().lower() for item in value.split(",") if item.strip()}
     if not operations:
         return None
-    unsupported = sorted(operations - HTTP_METHODS)
+    unsupported = sorted(operations - ALLOWED_OPERATION_CLASSES)
     if unsupported:
         raise ChiftCliError(
             f"Unsupported allowed operation `{unsupported[0]}`.",
             details={
                 "unsupported": unsupported,
-                "accepted": sorted(HTTP_METHODS),
+                "accepted": sorted(ALLOWED_OPERATION_CLASSES),
             },
         )
+    if "all" in operations:
+        return None
     return operations
 
 
@@ -97,6 +102,24 @@ def operation_uses_allowed_operations(operation: Operation) -> bool:
     )
 
 
+def operation_allowed_class(operation: Operation) -> str:
+    method = operation.method.lower()
+    if operation.scopes:
+        all_scopes_are_read_only = all(
+            scope.split(".")[-1] == "read" for scope in operation.scopes
+        )
+        if all_scopes_are_read_only:
+            return "read"
+        return "dangerous" if method in DANGEROUS_METHODS else "write"
+    if method in READ_METHODS:
+        return "read"
+    if method in WRITE_METHODS:
+        return "write"
+    if method in DANGEROUS_METHODS:
+        return "dangerous"
+    return "dangerous"
+
+
 def visible_operations() -> list[Operation]:
     allowed_operations = allowed_operation_filter()
     return [
@@ -106,7 +129,7 @@ def visible_operations() -> list[Operation]:
         and (
             allowed_operations is None
             or not operation_uses_allowed_operations(operation)
-            or operation.method.lower() in allowed_operations
+            or operation_allowed_class(operation) in allowed_operations
         )
     ]
 
@@ -436,15 +459,17 @@ def operation_callback(operation: Operation):
         if (
             allowed_operations is not None
             and operation_uses_allowed_operations(operation)
-            and operation.method.lower() not in allowed_operations
+            and operation_allowed_class(operation) not in allowed_operations
         ):
+            operation_class = operation_allowed_class(operation)
             exit_with_error(
                 ChiftCliError(
-                    f"Operation {operation.method} is not allowed.",
+                    f"Operation class `{operation_class}` is not allowed.",
                     details={
+                        "allowed": sorted(allowed_operations),
+                        "class": operation_class,
                         "method": operation.method,
                         "path": operation.path,
-                        "allowed": sorted(allowed_operations),
                     },
                 )
             )

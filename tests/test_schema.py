@@ -7,7 +7,16 @@ import time
 import httpx
 
 from chift_cli import config
-from chift_cli.schema import find_operation, load_schema, response_is_collection, save_schema, search_schema, schema_path, tree
+from chift_cli.schema import (
+    find_operation,
+    iter_operations,
+    load_schema,
+    response_is_collection,
+    save_schema,
+    search_schema,
+    schema_path,
+    tree,
+)
 
 
 SAMPLE_SCHEMA = {
@@ -150,6 +159,21 @@ def test_operations_store_scopes() -> None:
     operation = find_operation("accounting", "accounts", "get", SAMPLE_SCHEMA)
     assert operation is not None
     assert operation.scopes == ("accounting.accounts.read",)
+
+
+def test_iter_operations_includes_head_and_options_methods() -> None:
+    schema = {
+        "paths": {
+            "/consumers/{consumer_id}/accounting/status": {
+                "head": {"tags": ["Accounting"]},
+                "options": {"tags": ["Accounting"]},
+            }
+        }
+    }
+
+    methods = {operation.method for operation in iter_operations(schema)}
+
+    assert methods == {"HEAD", "OPTIONS"}
 
 
 def test_operation_classification_uses_scopes_when_two_tags_are_missing() -> None:

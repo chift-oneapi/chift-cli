@@ -63,11 +63,11 @@ def test_settings_derive_openapi_url_from_api_base_url(monkeypatch) -> None:
 
 
 def test_settings_reads_allowed_operations_from_environment(monkeypatch) -> None:
-    monkeypatch.setenv("CHIFT_ALLOWED_OPERATIONS", "get,post")
+    monkeypatch.setenv("CHIFT_ALLOWED_OPERATIONS", "read,write")
 
     settings = config.ChiftSettings()
 
-    assert settings.allowed_operations == "get,post"
+    assert settings.allowed_operations == "read,write"
 
 
 def test_settings_reads_platform_visibility_from_environment(monkeypatch) -> None:

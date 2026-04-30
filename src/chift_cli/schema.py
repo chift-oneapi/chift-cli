@@ -15,7 +15,7 @@ from .config import get_openapi_url, schema_path, settings
 from .errors import RetryRecommendedError
 
 
-HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
+HTTP_METHODS = {"delete", "get", "head", "options", "patch", "post", "put"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
 SCOPE_ACTION_PARTS = {"read", "write"}
 _BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()

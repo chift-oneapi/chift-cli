@@ -45,12 +45,12 @@ CHIFT_API_BASE_URL=http://chift.localhost:8000
 CHIFT_OPENAPI_URL=http://chift.localhost:8000/openapi.json
 CHIFT_CONFIG_DIR=/tmp/chift-config
 CHIFT_CACHE_DIR=/tmp/chift-cache
-CHIFT_ALLOWED_OPERATIONS=get,post
+CHIFT_ALLOWED_OPERATIONS=read,write
 ```
 
 If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
 
-Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of HTTP operations when the CLI should only execute those methods for business vertical endpoints. Supported values are `get`, `post`, `put`, `patch`, and `delete`. For example, `CHIFT_ALLOWED_OPERATIONS=get,post` rejects `put`, `patch`, and `delete` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
+Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: read-only scopes allow `read`, broad scopes allow `write`, and broad `DELETE` operations require `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST`, `PUT`, and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
 
 ## Schema Cache
 
