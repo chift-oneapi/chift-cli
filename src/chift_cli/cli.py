@@ -102,6 +102,23 @@ def operation_uses_allowed_operations(operation: Operation) -> bool:
     )
 
 
+def group_with_successful_help(*, help: str) -> typer.Typer:
+    group = typer.Typer(
+        no_args_is_help=False,
+        invoke_without_command=True,
+        help=help,
+        rich_markup_mode=None,
+    )
+
+    @group.callback()
+    def show_help_on_empty_group(ctx: typer.Context) -> None:
+        if ctx.invoked_subcommand is None:
+            typer.echo(ctx.get_help())
+            raise typer.Exit(0)
+
+    return group
+
+
 def operation_allowed_class(operation: Operation) -> str:
     method = operation.method.lower()
     if operation.scopes:
@@ -521,20 +538,16 @@ def register_dynamic_commands() -> None:
     for operation in visible_operations():
         vertical_app = vertical_apps.get(operation.vertical)
         if vertical_app is None:
-            vertical_app = typer.Typer(
-                no_args_is_help=True,
-                help=f"{operation.vertical} endpoints.",
-                rich_markup_mode=None,
+            vertical_app = group_with_successful_help(
+                help=f"{operation.vertical} endpoints."
             )
             app.add_typer(vertical_app, name=operation.vertical)
             vertical_apps[operation.vertical] = vertical_app
         entity_key = (operation.vertical, operation.entity)
         entity_app = entity_apps.get(entity_key)
         if entity_app is None:
-            entity_app = typer.Typer(
-                no_args_is_help=True,
-                help=f"{operation.entity} endpoints.",
-                rich_markup_mode=None,
+            entity_app = group_with_successful_help(
+                help=f"{operation.entity} endpoints."
             )
             vertical_app.add_typer(entity_app, name=operation.entity)
             entity_apps[entity_key] = entity_app

@@ -220,6 +220,29 @@ def test_allowed_operations_is_not_a_cli_flag() -> None:
     assert "--allowed-operations" not in result.stdout
 
 
+def test_dynamic_vertical_group_without_subcommand_shows_help_successfully() -> None:
+    result = runner.invoke(app, ["consumers"])
+
+    assert result.exit_code == 0
+    assert "consumers endpoints." in result.stdout
+    assert "Commands" in result.stdout
+
+
+def test_dynamic_entity_group_without_subcommand_shows_help_successfully() -> None:
+    result = runner.invoke(app, ["consumers", "consumers"])
+
+    assert result.exit_code == 0
+    assert "consumers endpoints." in result.stdout
+    assert "delete" in result.stdout
+
+
+def test_dynamic_group_keeps_invalid_subcommand_as_usage_error() -> None:
+    result = runner.invoke(app, ["consumers", "nope"])
+
+    assert result.exit_code == 2
+    assert "No such command" in result.stderr
+
+
 def test_dry_run_is_not_an_operation_flag() -> None:
     result = runner.invoke(app, ["consumers", "consumers", "delete", "--help"])
 
