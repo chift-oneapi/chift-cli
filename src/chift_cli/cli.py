@@ -139,6 +139,16 @@ def _input_values_from_args(
     path_names = path_parameter_names(operation.path)
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
+    if len(unnamed) > len(missing_path_names):
+        extras = unnamed[len(missing_path_names):]
+        raise ChiftCliError(
+            f"Unexpected positional argument `{extras[0]}`. "
+            "Pass endpoint inputs as KEY=VALUE.",
+            details={
+                "extras": extras,
+                "expected_path_parameters": missing_path_names,
+            },
+        )
     for name, value in zip(missing_path_names, unnamed):
         values[name] = value
     return values
@@ -313,8 +323,8 @@ def auth_setup(
         client_id=client_id, client_secret=client_secret, account_id=account_id
     )
     try:
-        save_api_key_credentials(credentials)
         fetch_token(credentials, debug=debug)
+        save_api_key_credentials(credentials)
     except ChiftCliError as exc:
         typer.secho(exc.message, err=True, fg=typer.colors.RED)
         raise typer.Exit(exc.exit_code) from None
@@ -407,25 +417,6 @@ def operation_callback(operation: Operation):
                 "--filter", help="Client-side filter as KEY=VALUE; can be repeated."
             ),
         ] = None,
-        cursor: Annotated[
-            str | None,
-            typer.Option(
-                "--cursor", help="Pagination cursor, added as a query parameter."
-            ),
-        ] = None,
-        limit: Annotated[
-            int | None,
-            typer.Option(
-                "--limit", help="Pagination limit, added as a query parameter."
-            ),
-        ] = None,
-        all_pages: Annotated[
-            bool,
-            typer.Option(
-                "--all",
-                help="Reserved for auto-pagination once cursor names are known.",
-            ),
-        ] = False,
         schema: Annotated[
             bool,
             typer.Option(
@@ -463,13 +454,10 @@ def operation_callback(operation: Operation):
         if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
             exit_with_error(ChiftCliError("Mutating operations require --force."))
         merged_params = list(params or [])
-        if cursor:
-            merged_params.append(f"cursor={cursor}")
-        if limit is not None:
-            merged_params.append(f"limit={limit}")
-        if all_pages:
-            merged_params.append("all=true")
-        input_values = _input_values_from_args(operation, input_args, merged_params)
+        try:
+            input_values = _input_values_from_args(operation, input_args, merged_params)
+        except ChiftCliError as exc:
+            exit_with_error(exc)
         merged_schema = input_schema(operation)["json_schema"]
         try:
             validate_input_names(operation, input_args, merged_params, merged_schema)

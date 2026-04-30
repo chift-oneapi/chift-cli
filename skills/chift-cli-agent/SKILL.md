@@ -104,10 +104,10 @@ chift accounting suppliers list <consumer_id> search=acme --fields id,name
 chift accounting suppliers list <consumer_id> --fields id | jq 'length'
 ```
 
-For quick existence checks, request only enough to answer:
+For quick existence checks, request only enough to answer. Pagination uses `page` and `size` (not `limit` / `cursor`):
 
 ```bash
-chift accounting suppliers list <consumer_id> search=acme limit=1 --fields id,name
+chift accounting suppliers list <consumer_id> search=acme size=1 --fields id,name
 ```
 
 Use `--fields` to reduce response size after the API response:
@@ -122,7 +122,8 @@ Use `--filter` to filter list responses client-side:
 chift accounting folders list <consumer_id> --filter name=Sales
 ```
 
-`--fields` and `--filter` are local post-processing. API query parameters must be passed as endpoint inputs (`KEY=VALUE` or `--param KEY=VALUE`).
+`--filter` and `--fields` apply to top-level array responses and to paginated `{items, page, size, total}` envelopes (they target `items`).
+API query parameters must be passed as endpoint inputs (`KEY=VALUE` or `--param KEY=VALUE`).
 
 ## Error Handling
 

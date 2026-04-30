@@ -8,10 +8,12 @@ import httpx
 from .auth import get_access_token
 from .config import get_api_base_url
 from .errors import AuthenticationError, ChiftCliError, RetryRecommendedError
+from .output import log
 from .pathing import path_parameter_names
 from .schema import Operation
 
 _MISSING = object()
+_PAGE_KEYS = {"items", "page", "size", "total"}
 
 
 def parse_key_value(values: list[str] | None) -> dict[str, str]:
@@ -57,10 +59,20 @@ def build_request(operation: Operation, *, params: list[str] | None, body: str |
     }
     body_inputs = {key: value for key, value in all_inputs.items() if key not in query}
     request_body = parse_json_body(body)
-    if body_inputs and isinstance(request_body, dict):
-        request_body = {**request_body, **body_inputs}
-    elif body_inputs and operation.raw.get("requestBody"):
-        request_body = body_inputs
+    if body_inputs:
+        if request_body is None:
+            if operation.raw.get("requestBody"):
+                request_body = body_inputs
+        elif isinstance(request_body, dict):
+            request_body = {**request_body, **body_inputs}
+        else:
+            raise ChiftCliError(
+                "Cannot merge KEY=VALUE inputs into a non-object --json body.",
+                details={
+                    "body_type": type(request_body).__name__,
+                    "body_inputs": sorted(body_inputs),
+                },
+            )
     return {
         "method": operation.method,
         "url": f"{get_api_base_url().rstrip('/')}{path}",
@@ -69,10 +81,16 @@ def build_request(operation: Operation, *, params: list[str] | None, body: str |
     }
 
 
+def _is_page_envelope(data: Any) -> bool:
+    return isinstance(data, dict) and _PAGE_KEYS.issubset(data) and isinstance(data["items"], list)
+
+
 def apply_fields(data: Any, fields: str | None) -> Any:
     if not fields:
         return data
     wanted = [field.strip() for field in fields.split(",") if field.strip()]
+    if _is_page_envelope(data):
+        return {**data, "items": [apply_fields(item, fields) for item in data["items"]]}
     if isinstance(data, list):
         return [apply_fields(item, fields) for item in data]
     if not isinstance(data, dict):
@@ -96,7 +114,17 @@ def _nested_get(data: dict[str, Any], field: str, *, default: Any = None) -> Any
 
 def apply_filter(data: Any, filters: list[str] | None) -> Any:
     rules = parse_key_value(filters)
-    if not rules or not isinstance(data, list):
+    if not rules:
+        return data
+    if _is_page_envelope(data):
+        items = [
+            item
+            for item in data["items"]
+            if isinstance(item, dict)
+            and all(str(_nested_get(item, key)) == value for key, value in rules.items())
+        ]
+        return {**data, "items": items, "total": len(items)}
+    if not isinstance(data, list):
         return data
     return [item for item in data if isinstance(item, dict) and all(str(_nested_get(item, key)) == value for key, value in rules.items())]
 
@@ -114,6 +142,7 @@ def execute_operation(
     request = build_request(operation, params=params, body=body, input_values=input_values)
     token = get_access_token(debug=debug)
     headers = {"Authorization": f"Bearer {token}"}
+    log(f"{request['method']} {request['url']} params={request['params']}", debug=debug)
     try:
         response = httpx.request(
             request["method"],
@@ -125,6 +154,7 @@ def execute_operation(
         )
     except httpx.HTTPError as exc:
         raise RetryRecommendedError("Could not reach Chift API.", details={"reason": str(exc)}) from exc
+    log(f"<- {response.status_code} ({len(response.content)} bytes)", debug=debug)
     if response.status_code in {401, 403}:
         raise AuthenticationError("Chift rejected the access token.", details={"status_code": response.status_code})
     if response.status_code >= 500:

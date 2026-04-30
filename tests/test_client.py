@@ -50,3 +50,68 @@ def test_apply_fields_keeps_explicit_none_values() -> None:
 def test_apply_filter_keeps_matching_items() -> None:
     data = [{"name": "Acme"}, {"name": "Other"}]
     assert apply_filter(data, ["name=Acme"]) == [{"name": "Acme"}]
+
+
+def test_apply_filter_handles_paginated_envelope() -> None:
+    data = {
+        "items": [{"name": "Acme"}, {"name": "Other"}],
+        "page": 1,
+        "size": 50,
+        "total": 2,
+    }
+    assert apply_filter(data, ["name=Acme"]) == {
+        "items": [{"name": "Acme"}],
+        "page": 1,
+        "size": 50,
+        "total": 1,
+    }
+
+
+def test_apply_fields_handles_paginated_envelope() -> None:
+    data = {
+        "items": [{"id": "1", "name": "Acme", "extra": True}],
+        "page": 1,
+        "size": 50,
+        "total": 1,
+    }
+    assert apply_fields(data, "id,name") == {
+        "items": [{"id": "1", "name": "Acme"}],
+        "page": 1,
+        "size": 50,
+        "total": 1,
+    }
+
+
+def test_build_request_rejects_body_inputs_when_json_body_is_not_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    op = Operation(
+        vertical="accounting",
+        entity="clients",
+        command="create",
+        method="POST",
+        path="/consumers/{consumer_id}/accounting/clients",
+        operation_id="",
+        summary="",
+        scopes=(),
+        raw={
+            "parameters": [
+                {
+                    "name": "consumer_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+        },
+    )
+    with pytest.raises(ChiftCliError) as exc_info:
+        from chift_cli.client import build_request as br
+
+        br(op, params=["consumer_id=c1"], body="[1,2,3]", input_values={"name": "x"})
+    assert "non-object --json body" in exc_info.value.message

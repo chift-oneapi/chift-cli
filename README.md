@@ -131,9 +131,15 @@ uv run chift accounting folders list <consumer_id> --fields id,name,parent.id
 uv run chift accounting folders list <consumer_id> --filter name=Sales
 ```
 
-`--fields` keeps selected fields after the response is received.
+`--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`.
 
-`--filter` filters list responses after the response is received. Multiple filters are ANDed together.
+`--filter` filters list responses after the response is received. Multiple filters are ANDed together. For paginated responses it filters `items` and updates `total`.
+
+Pagination uses the API's own `page` and `size` query parameters; pass them as endpoint inputs:
+
+```bash
+uv run chift accounting suppliers list <consumer_id> page=2 size=50
+```
 
 ## Schema Search
 
