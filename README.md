@@ -10,6 +10,53 @@ uv run chift --help
 uv run chift auth setup
 ```
 
+## Local Install
+
+Install the CLI from this checkout when you want to run `chift` directly without `uv run`:
+
+```bash
+uv tool install .
+chift --help
+```
+
+This installs a fixed build of the current checkout into uv's tool environment. Use this for normal local usage.
+
+If you are developing the CLI and want the installed `chift` command to point at your working tree, install it in editable mode:
+
+```bash
+uv tool install --editable .
+```
+
+Editable installs are convenient for contributors because local source changes are reflected by the installed command. They are not recommended for regular users because the command can change or break as the checkout changes.
+
+After switching between regular and editable installs, or after dependency changes, reinstall with `--force`:
+
+```bash
+uv tool install . --force
+```
+
+If you do not use uv, install with pip from a Python 3.11+ environment:
+
+```bash
+python -m pip install .
+chift --help
+```
+
+For an isolated environment without uv:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+chift --help
+```
+
+For editable contributor installs without uv:
+
+```bash
+python -m pip install -e .
+```
+
 `auth setup` opens an interactive terminal form by default. You can skip the UI with flags:
 
 ```bash
