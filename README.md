@@ -97,7 +97,7 @@ CHIFT_ALLOWED_OPERATIONS=read,write
 
 If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
 
-Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: read-only scopes allow `read`, broad scopes allow `write`, and broad `DELETE` operations require `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST`, `PUT`, and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
+Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: an operation is `read` when any of its scopes ends in `.read`, otherwise broad-scoped non-`DELETE` operations are `write` and broad-scoped `DELETE` operations are `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST`, `PUT`, and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
 
 ## Schema Cache
 
@@ -135,6 +135,22 @@ or with `--param`:
 uv run chift accounting suppliers get <consumer_id> \
   --param supplier_id=<supplier_id> \
   --param folder_id=<folder_id>
+```
+
+`--param` and positional values are decoded as JSON when they look like a JSON literal (`true`, `false`, `null`) or start with `[` / `{`, so list and object body fields can be passed without `--json`:
+
+```bash
+uv run chift accounting suppliers create <consumer_id> --force \
+  --param name=Acme \
+  --param 'addresses=[{"address_type":"main","country":"BE","street":"...","city":"...","postal_code":"..."}]' \
+  --param active=true
+```
+
+For full request bodies use `--json`. A required body field is treated as provided when its key is in the parsed `--json` object, so `--json` alone is enough for endpoints with required body fields:
+
+```bash
+uv run chift accounting suppliers create <consumer_id> --force \
+  --json '{"name":"Acme","addresses":[{...}]}'
 ```
 
 The CLI uses the OpenAPI schema to route values internally to path, query, or JSON body fields. Unknown params fail before the request is sent.
@@ -175,12 +191,14 @@ uv run chift accounting folders list <consumer_id> --debug
 
 ```bash
 uv run chift accounting folders list <consumer_id> --fields id,name,parent.id
+uv run chift accounting suppliers get <consumer_id> supplier_id=<id> --fields id,addresses.0.country
 uv run chift accounting folders list <consumer_id> --filter name=Sales
+uv run chift accounting clients list <consumer_id> --filter is_company=true --filter parent=null
 ```
 
-`--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`.
+`--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`. Nested paths can include numeric indices to descend into arrays (`addresses.0.country`).
 
-`--filter` filters list responses after the response is received. Multiple filters are ANDed together. For paginated responses it filters `items` and updates `total`.
+`--filter` filters list responses after the response is received. Multiple filters are ANDed together. Booleans and `null` are matched case-insensitively against their lowercase JSON form (`is_company=true`, `parent=null`). For paginated responses it filters `items` and updates `total`.
 
 Pagination uses the API's own `page` and `size` query parameters; pass them as endpoint inputs:
 

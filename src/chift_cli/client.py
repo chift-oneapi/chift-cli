@@ -14,15 +14,30 @@ from .schema import Operation
 
 _MISSING = object()
 _PAGE_KEYS = {"items", "page", "size", "total"}
+_JSON_LITERALS = {"true", "false", "null"}
 
 
-def parse_key_value(values: list[str] | None) -> dict[str, str]:
-    result: dict[str, str] = {}
+def _coerce_param_value(raw: str) -> Any:
+    stripped = raw.strip()
+    if not stripped:
+        return raw
+    if stripped[0] in {"[", "{"} or stripped in _JSON_LITERALS:
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return raw
+    return raw
+
+
+def parse_key_value(
+    values: list[str] | None, *, coerce: bool = False
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
     for value in values or []:
         if "=" not in value:
             raise ChiftCliError("Expected KEY=VALUE.", details={"value": value})
         key, raw = value.split("=", 1)
-        result[key] = raw
+        result[key] = _coerce_param_value(raw) if coerce else raw
     return result
 
 
@@ -40,7 +55,7 @@ def _query_parameter_names(operation: Operation) -> set[str]:
 
 
 def build_request(operation: Operation, *, params: list[str] | None, body: str | None, input_values: dict[str, Any] | None = None) -> dict[str, Any]:
-    all_params = parse_key_value(params)
+    all_params = parse_key_value(params, coerce=True)
     all_inputs = {**(input_values or {}), **all_params}
     query_names = _query_parameter_names(operation)
     path = operation.path
@@ -103,13 +118,41 @@ def apply_fields(data: Any, fields: str | None) -> Any:
     return filtered
 
 
-def _nested_get(data: dict[str, Any], field: str, *, default: Any = None) -> Any:
+def _nested_get(data: Any, field: str, *, default: Any = None) -> Any:
     current: Any = data
     for part in field.split("."):
-        if not isinstance(current, dict) or part not in current:
+        if isinstance(current, dict):
+            if part not in current:
+                return default
+            current = current[part]
+        elif isinstance(current, list):
+            try:
+                index = int(part)
+            except ValueError:
+                return default
+            if not -len(current) <= index < len(current):
+                return default
+            current = current[index]
+        else:
             return default
-        current = current[part]
     return current
+
+
+def _normalize_filter_value(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _matches_filters(item: Any, rules: dict[str, str]) -> bool:
+    if not isinstance(item, dict):
+        return False
+    return all(
+        _normalize_filter_value(_nested_get(item, key)) == expected
+        for key, expected in rules.items()
+    )
 
 
 def apply_filter(data: Any, filters: list[str] | None) -> Any:
@@ -117,16 +160,11 @@ def apply_filter(data: Any, filters: list[str] | None) -> Any:
     if not rules:
         return data
     if _is_page_envelope(data):
-        items = [
-            item
-            for item in data["items"]
-            if isinstance(item, dict)
-            and all(str(_nested_get(item, key)) == value for key, value in rules.items())
-        ]
+        items = [item for item in data["items"] if _matches_filters(item, rules)]
         return {**data, "items": items, "total": len(items)}
     if not isinstance(data, list):
         return data
-    return [item for item in data if isinstance(item, dict) and all(str(_nested_get(item, key)) == value for key, value in rules.items())]
+    return [item for item in data if _matches_filters(item, rules)]
 
 
 def execute_operation(

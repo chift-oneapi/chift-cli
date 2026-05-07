@@ -20,7 +20,12 @@ runner = CliRunner()
 
 
 def _operation(
-    vertical: str, method: str, path: str, scopes: tuple[str, ...] = ()
+    vertical: str,
+    method: str,
+    path: str,
+    scopes: tuple[str, ...] = (),
+    *,
+    body_schema: dict | None = None,
 ) -> Operation:
     parameters = [
         {
@@ -32,6 +37,12 @@ def _operation(
         for part in path.split("/")
         if part.startswith("{") and part.endswith("}")
     ]
+    raw: dict = {"parameters": parameters}
+    if body_schema is not None:
+        raw["requestBody"] = {
+            "required": True,
+            "content": {"application/json": {"schema": body_schema}},
+        }
     return Operation(
         vertical=vertical,
         entity="items",
@@ -41,7 +52,7 @@ def _operation(
         operation_id="",
         summary="",
         scopes=scopes,
-        raw={"parameters": parameters},
+        raw=raw,
     )
 
 
@@ -337,6 +348,22 @@ def test_operation_allowed_class_treats_broad_scoped_delete_as_dangerous() -> No
     assert operation_allowed_class(operation) == "dangerous"
 
 
+def test_operation_allowed_class_classifies_mixed_scopes_as_read() -> None:
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        scopes=(
+            "accounting",
+            "accounting.suppliers",
+            "accounting.suppliers.read",
+            "accounting.read",
+        ),
+    )
+
+    assert operation_allowed_class(operation) == "read"
+
+
 def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> None:
     assert (
         operation_allowed_class(
@@ -356,6 +383,73 @@ def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> 
         )
         == "dangerous"
     )
+
+
+def test_operation_accepts_required_body_fields_via_json_flag(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_execute_operation(operation, **kwargs):
+        captured.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr("chift_cli.cli.execute_operation", fake_execute_operation)
+    operation = _operation(
+        "accounting",
+        "POST",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        body_schema={
+            "type": "object",
+            "required": ["name", "addresses"],
+            "properties": {
+                "name": {"type": "string"},
+                "addresses": {"type": "array", "items": {"type": "object"}},
+            },
+        },
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        [
+            "consumer-1",
+            "--force",
+            "--json",
+            '{"name":"Acme","addresses":[]}',
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"ok": True}
+    assert captured["body"] == '{"name":"Acme","addresses":[]}'
+
+
+def test_operation_rejects_invalid_json_body_with_argument_error(monkeypatch) -> None:
+    calls: list = []
+
+    def fake_execute_operation(operation, **kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr("chift_cli.cli.execute_operation", fake_execute_operation)
+    operation = _operation(
+        "accounting",
+        "POST",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        body_schema={
+            "type": "object",
+            "required": ["name"],
+            "properties": {"name": {"type": "string"}},
+        },
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["consumer-1", "--force", "--json", "{not json"],
+    )
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stderr)
+    assert payload["error"]["message"] == "Invalid JSON body."
+    assert calls == []
 
 
 def test_operation_rejects_extra_positional_arguments() -> None:

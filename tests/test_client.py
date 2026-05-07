@@ -82,6 +82,78 @@ def test_apply_fields_handles_paginated_envelope() -> None:
     }
 
 
+def test_apply_fields_supports_array_indices() -> None:
+    data = {
+        "id": "1",
+        "addresses": [{"country": "BE"}, {"country": "FR"}],
+    }
+    assert apply_fields(data, "id,addresses.0.country,addresses.1.country") == {
+        "id": "1",
+        "addresses.0.country": "BE",
+        "addresses.1.country": "FR",
+    }
+
+
+def test_apply_filter_normalizes_booleans_and_null() -> None:
+    data = {
+        "items": [
+            {"name": "Alpha", "is_company": True, "parent": None},
+            {"name": "Bravo", "is_company": False, "parent": "x"},
+        ],
+        "page": 1,
+        "size": 50,
+        "total": 2,
+    }
+    only_companies = apply_filter(data, ["is_company=true"])
+    assert [item["name"] for item in only_companies["items"]] == ["Alpha"]
+
+    only_root = apply_filter(data, ["parent=null"])
+    assert [item["name"] for item in only_root["items"]] == ["Alpha"]
+
+
+def test_build_request_coerces_json_param_values_for_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    op = Operation(
+        vertical="accounting",
+        entity="suppliers",
+        command="create",
+        method="POST",
+        path="/consumers/{consumer_id}/accounting/suppliers",
+        operation_id="",
+        summary="",
+        scopes=(),
+        raw={
+            "parameters": [
+                {
+                    "name": "consumer_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+        },
+    )
+    request = build_request(
+        op,
+        params=[
+            "consumer_id=c1",
+            "name=Acme",
+            "addresses=[{\"country\":\"BE\"}]",
+            "active=true",
+        ],
+        body=None,
+    )
+    assert request["json"] == {
+        "name": "Acme",
+        "addresses": [{"country": "BE"}],
+        "active": True,
+    }
+
+
 def test_build_request_rejects_body_inputs_when_json_body_is_not_object(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
