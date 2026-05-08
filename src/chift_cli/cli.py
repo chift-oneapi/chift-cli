@@ -7,7 +7,7 @@ import typer
 
 from .auth import fetch_token
 from .auth_form import prompt_auth_credentials
-from .client import execute_operation
+from .client import execute_operation, parse_json_body
 from .config import (
     ApiKeyCredentials,
     INTERNAL_ENDPOINT_VERTICALS,
@@ -122,10 +122,10 @@ def group_with_successful_help(*, help: str) -> typer.Typer:
 def operation_allowed_class(operation: Operation) -> str:
     method = operation.method.lower()
     if operation.scopes:
-        all_scopes_are_read_only = all(
+        any_read_scope = any(
             scope.split(".")[-1] == "read" for scope in operation.scopes
         )
-        if all_scopes_are_read_only:
+        if any_read_scope:
             return "read"
         return "dangerous" if method in DANGEROUS_METHODS else "write"
     if method in READ_METHODS:
@@ -505,7 +505,13 @@ def operation_callback(operation: Operation):
             validate_input_names(operation, input_args, merged_params, merged_schema)
         except ChiftCliError as exc:
             exit_with_error(exc)
+        try:
+            parsed_body = parse_json_body(body)
+        except ChiftCliError as exc:
+            exit_with_error(exc)
         provided_inputs = _provided_parameters(merged_params) | set(input_values)
+        if isinstance(parsed_body, dict):
+            provided_inputs |= set(parsed_body.keys())
         missing_required = [
             name
             for name in merged_schema.get("required", [])

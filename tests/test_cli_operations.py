@@ -20,7 +20,12 @@ runner = CliRunner()
 
 
 def _operation(
-    vertical: str, method: str, path: str, scopes: tuple[str, ...] = ()
+    vertical: str,
+    method: str,
+    path: str,
+    scopes: tuple[str, ...] = (),
+    *,
+    body_schema: dict | None = None,
 ) -> Operation:
     parameters = [
         {
@@ -32,6 +37,12 @@ def _operation(
         for part in path.split("/")
         if part.startswith("{") and part.endswith("}")
     ]
+    raw: dict = {"parameters": parameters}
+    if body_schema is not None:
+        raw["requestBody"] = {
+            "required": True,
+            "content": {"application/json": {"schema": body_schema}},
+        }
     return Operation(
         vertical=vertical,
         entity="items",
@@ -41,7 +52,7 @@ def _operation(
         operation_id="",
         summary="",
         scopes=scopes,
-        raw={"parameters": parameters},
+        raw=raw,
     )
 
 
@@ -288,6 +299,71 @@ def test_visible_operations_filters_by_allowed_operation_classes(monkeypatch) ->
     assert consumer_methods == {"DELETE"}
 
 
+def test_read_only_mode_includes_mixed_scope_operations(monkeypatch) -> None:
+    # Operations whose scope list contains a .read scope alongside a broad parent scope
+    # must survive CHIFT_ALLOWED_OPERATIONS=read — this was the original bug.
+    schema = {
+        "paths": {
+            "/consumers/{consumer_id}/accounting/suppliers": {
+                "get": {
+                    "tags": ["Accounting"],
+                    "security": [
+                        {"oauth2": ["accounting.suppliers", "accounting.suppliers.read"]}
+                    ],
+                    "parameters": [
+                        {
+                            "name": "consumer_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        }
+                    ],
+                }
+            },
+            "/consumers/{consumer_id}/accounting/suppliers/{supplier_id}": {
+                "post": {
+                    "tags": ["Accounting"],
+                    "security": [{"oauth2": ["accounting.suppliers"]}],
+                    "parameters": [
+                        {
+                            "name": "consumer_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        }
+                    ],
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(config.settings, "allowed_operations", "read")
+    monkeypatch.setattr("chift_cli.cli.load_schema", lambda: schema)
+
+    operations = visible_operations()
+    methods = {op.method for op in operations if op.vertical == "accounting"}
+
+    assert "GET" in methods
+    assert "POST" not in methods
+
+
+def test_read_only_mode_allows_mixed_scope_operation_callback(monkeypatch) -> None:
+    # Callback must not reject an operation that carries both a broad scope and a .read scope.
+    monkeypatch.setattr(config.settings, "allowed_operations", "read")
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        scopes=("accounting.suppliers", "accounting.suppliers.read"),
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["--schema"],
+    )
+
+    assert result.exit_code == 0
+
+
 def test_allowed_operations_all_allows_vertical_classes(monkeypatch) -> None:
     monkeypatch.setattr(config.settings, "allowed_operations", "all")
     operation = _operation(
@@ -326,6 +402,31 @@ def test_operation_allowed_class_uses_broad_scopes_before_method() -> None:
     assert operation_allowed_class(operation) == "write"
 
 
+def test_operation_allowed_class_mixed_scopes_read_wins() -> None:
+    # Chift sends both the broad parent scope and a .read scope together.
+    # A single .read scope is enough to classify the operation as read.
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        scopes=("accounting.suppliers", "accounting.suppliers.read"),
+    )
+
+    assert operation_allowed_class(operation) == "read"
+
+
+def test_operation_allowed_class_mixed_scopes_delete_with_read_scope_is_read() -> None:
+    # Even a DELETE that carries a .read scope alongside a broad scope is read-classified.
+    operation = _operation(
+        "accounting",
+        "DELETE",
+        "/consumers/{consumer_id}/accounting/suppliers/{supplier_id}",
+        scopes=("accounting.suppliers", "accounting.suppliers.read"),
+    )
+
+    assert operation_allowed_class(operation) == "read"
+
+
 def test_operation_allowed_class_treats_broad_scoped_delete_as_dangerous() -> None:
     operation = _operation(
         "accounting",
@@ -335,6 +436,22 @@ def test_operation_allowed_class_treats_broad_scoped_delete_as_dangerous() -> No
     )
 
     assert operation_allowed_class(operation) == "dangerous"
+
+
+def test_operation_allowed_class_classifies_mixed_scopes_as_read() -> None:
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        scopes=(
+            "accounting",
+            "accounting.suppliers",
+            "accounting.suppliers.read",
+            "accounting.read",
+        ),
+    )
+
+    assert operation_allowed_class(operation) == "read"
 
 
 def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> None:
@@ -356,6 +473,73 @@ def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> 
         )
         == "dangerous"
     )
+
+
+def test_operation_accepts_required_body_fields_via_json_flag(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_execute_operation(operation, **kwargs):
+        captured.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr("chift_cli.cli.execute_operation", fake_execute_operation)
+    operation = _operation(
+        "accounting",
+        "POST",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        body_schema={
+            "type": "object",
+            "required": ["name", "addresses"],
+            "properties": {
+                "name": {"type": "string"},
+                "addresses": {"type": "array", "items": {"type": "object"}},
+            },
+        },
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        [
+            "consumer-1",
+            "--force",
+            "--json",
+            '{"name":"Acme","addresses":[]}',
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"ok": True}
+    assert captured["body"] == '{"name":"Acme","addresses":[]}'
+
+
+def test_operation_rejects_invalid_json_body_with_argument_error(monkeypatch) -> None:
+    calls: list = []
+
+    def fake_execute_operation(operation, **kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr("chift_cli.cli.execute_operation", fake_execute_operation)
+    operation = _operation(
+        "accounting",
+        "POST",
+        "/consumers/{consumer_id}/accounting/suppliers",
+        body_schema={
+            "type": "object",
+            "required": ["name"],
+            "properties": {"name": {"type": "string"}},
+        },
+    )
+
+    result = runner.invoke(
+        _operation_app(operation),
+        ["consumer-1", "--force", "--json", "{not json"],
+    )
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stderr)
+    assert payload["error"]["message"] == "Invalid JSON body."
+    assert calls == []
 
 
 def test_operation_rejects_extra_positional_arguments() -> None:
