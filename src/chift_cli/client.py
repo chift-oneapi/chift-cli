@@ -13,7 +13,7 @@ from .pathing import path_parameter_names
 from .schema import Operation
 
 _MISSING = object()
-_PAGE_KEYS = {"items", "page", "size", "total"}
+_PAGE_KEYS = {"items", "page", "size"}
 _JSON_LITERALS = {"true", "false", "null"}
 
 
@@ -161,7 +161,9 @@ def apply_filter(data: Any, filters: list[str] | None) -> Any:
         return data
     if _is_page_envelope(data):
         items = [item for item in data["items"] if _matches_filters(item, rules)]
-        return {**data, "items": items, "total": len(items)}
+        filtered = {**data, "items": items}
+        filtered.pop("total", None)
+        return filtered
     if not isinstance(data, list):
         return data
     return [item for item in data if _matches_filters(item, rules)]

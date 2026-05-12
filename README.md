@@ -198,7 +198,7 @@ uv run chift accounting clients list <consumer_id> --filter is_company=true --fi
 
 `--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`. Nested paths can include numeric indices to descend into arrays (`addresses.0.country`).
 
-`--filter` filters list responses after the response is received. Multiple filters are ANDed together. Booleans and `null` are matched case-insensitively against their lowercase JSON form (`is_company=true`, `parent=null`). For paginated responses it filters `items` and updates `total`.
+`--filter` filters list responses after the response is received. Multiple filters are ANDed together. Booleans and `null` are matched case-insensitively against their lowercase JSON form (`is_company=true`, `parent=null`). For paginated responses it filters `items` and drops `total` (the server-side total no longer matches the filtered page; use server-side query params if you need an accurate count).
 
 Pagination uses the API's own `page` and `size` query parameters; pass them as endpoint inputs:
 

@@ -63,7 +63,23 @@ def test_apply_filter_handles_paginated_envelope() -> None:
         "items": [{"name": "Acme"}],
         "page": 1,
         "size": 50,
-        "total": 1,
+    }
+
+
+def test_apply_fields_still_targets_items_after_filter_drops_total() -> None:
+    filtered = apply_filter(
+        {
+            "items": [{"id": "1", "name": "Acme"}, {"id": "2", "name": "Other"}],
+            "page": 1,
+            "size": 50,
+            "total": 2,
+        },
+        ["name=Acme"],
+    )
+    assert apply_fields(filtered, "id") == {
+        "items": [{"id": "1"}],
+        "page": 1,
+        "size": 50,
     }
 
 
