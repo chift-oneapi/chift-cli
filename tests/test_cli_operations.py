@@ -65,7 +65,7 @@ def _operation_app(operation: Operation) -> typer.Typer:
 def test_operation_with_only_missing_consumer_id_returns_context_usage() -> None:
     result = runner.invoke(app, ["consumers", "consumers", "delete", "--force"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "This endpoint needs additional input." in result.stdout
     assert "chift consumers consumers delete <consumer_id>" in result.stdout
     assert "This is the schema of the params:" not in result.stdout

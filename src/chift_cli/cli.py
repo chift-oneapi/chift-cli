@@ -519,7 +519,7 @@ def operation_callback(operation: Operation):
         ]
         if missing_required:
             emit_missing_input_guidance(operation, merged_schema)
-            return
+            raise typer.Exit(2)
         emit(
             execute_operation(
                 operation,
