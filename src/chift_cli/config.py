@@ -47,6 +47,7 @@ class ChiftSettings(BaseSettings):
     show_internal_endpoints: bool = False
     show_platform_endpoints: bool = False
     allowed_operations: str | None = None
+    consumer_id: str | None = None
     schema_refresh_interval_seconds: int = DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS
 
 

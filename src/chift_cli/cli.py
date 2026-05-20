@@ -176,6 +176,8 @@ def _input_values_from_args(
             values[key] = value
         else:
             unnamed.append(item)
+    if settings.consumer_id and "consumer_id" not in values:
+        values["consumer_id"] = settings.consumer_id
     path_names = path_parameter_names(operation.path)
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
@@ -227,27 +229,23 @@ def _display_schema(schema: dict[str, Any]) -> dict[str, Any]:
 def input_schema(operation: Operation) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
-    routing: dict[str, str] = {}
     for parameter in operation.raw.get("parameters") or []:
         name = parameter.get("name")
         location = parameter.get("in")
         if not isinstance(name, str) or location not in {"path", "query"}:
             continue
         properties[name] = _json_schema_for_parameter(parameter)
-        routing[name] = location
         if parameter.get("required"):
             required.append(name)
     body_schema = _request_body_schema(operation)
     if body_schema.get("type") == "object":
         for name, schema in (body_schema.get("properties") or {}).items():
             properties.setdefault(name, schema)
-            routing.setdefault(name, "body")
         for name in body_schema.get("required") or []:
             if name not in required:
                 required.append(name)
     elif body_schema:
         properties["body"] = body_schema
-        routing["body"] = "body"
         if (operation.raw.get("requestBody") or {}).get("required"):
             required.append("body")
     schema: dict[str, Any] = {
@@ -257,7 +255,7 @@ def input_schema(operation: Operation) -> dict[str, Any]:
     }
     if required:
         schema["required"] = required
-    return {"json_schema": schema, "routing": routing}
+    return schema
 
 
 def _input_usage(operation: Operation, schema: dict[str, Any]) -> str:
@@ -491,7 +489,7 @@ def operation_callback(operation: Operation):
                 )
             )
         if schema:
-            emit(_display_schema(input_schema(operation)["json_schema"]), output)
+            emit(_display_schema(input_schema(operation)), output)
             return
         if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
             exit_with_error(ChiftCliError("Mutating operations require --force."))
@@ -500,7 +498,7 @@ def operation_callback(operation: Operation):
             input_values = _input_values_from_args(operation, input_args, merged_params)
         except ChiftCliError as exc:
             exit_with_error(exc)
-        merged_schema = input_schema(operation)["json_schema"]
+        merged_schema = input_schema(operation)
         try:
             validate_input_names(operation, input_args, merged_params, merged_schema)
         except ChiftCliError as exc:

@@ -91,11 +91,18 @@ class OperationClassification:
     entity: str
 
 
+_VERTICAL_ALIASES: dict[str, str] = {
+    "pos": "point-of-sale",
+    "p-o-s": "point-of-sale",
+}
+
+
 def slugify(value: str) -> str:
     value = value.replace("_", "-")
     value = re.sub(r"(?<!^)(?=[A-Z])", "-", value).lower()
     value = re.sub(r"[^a-z0-9-]+", "-", value)
-    return re.sub(r"-+", "-", value).strip("-") or "root"
+    result = re.sub(r"-+", "-", value).strip("-") or "root"
+    return _VERTICAL_ALIASES.get(result, result)
 
 
 def load_schema() -> dict[str, Any]:

@@ -167,18 +167,7 @@ def apply_filter(data: Any, filters: list[str] | None) -> Any:
     return [item for item in data if _matches_filters(item, rules)]
 
 
-def execute_operation(
-    operation: Operation,
-    *,
-    params: list[str] | None = None,
-    body: str | None = None,
-    fields: str | None = None,
-    filters: list[str] | None = None,
-    debug: bool = False,
-    input_values: dict[str, Any] | None = None,
-) -> Any:
-    request = build_request(operation, params=params, body=body, input_values=input_values)
-    token = get_access_token(debug=debug)
+def _do_request(request: dict[str, Any], token: str, *, debug: bool = False) -> httpx.Response:
     headers = {"Authorization": f"Bearer {token}"}
     log(f"{request['method']} {request['url']} params={request['params']}", debug=debug)
     try:
@@ -193,6 +182,30 @@ def execute_operation(
     except httpx.HTTPError as exc:
         raise RetryRecommendedError("Could not reach Chift API.", details={"reason": str(exc)}) from exc
     log(f"<- {response.status_code} ({len(response.content)} bytes)", debug=debug)
+    return response
+
+
+def execute_operation(
+    operation: Operation,
+    *,
+    params: list[str] | None = None,
+    body: str | None = None,
+    fields: str | None = None,
+    filters: list[str] | None = None,
+    debug: bool = False,
+    input_values: dict[str, Any] | None = None,
+) -> Any:
+    request = build_request(operation, params=params, body=body, input_values=input_values)
+    token = get_access_token(debug=debug)
+    response = _do_request(request, token, debug=debug)
+    if response.status_code == 401:
+        # Token may have been invalidated server-side; refresh and retry once.
+        from .auth import fetch_token, load_api_key_credentials
+        credentials = load_api_key_credentials()
+        if credentials is None:
+            raise AuthenticationError("Chift rejected the access token.", details={"status_code": 401})
+        token = fetch_token(credentials, debug=debug).access_token
+        response = _do_request(request, token, debug=debug)
     if response.status_code in {401, 403}:
         raise AuthenticationError("Chift rejected the access token.", details={"status_code": response.status_code})
     if response.status_code >= 500:

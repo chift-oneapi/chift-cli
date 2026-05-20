@@ -26,13 +26,16 @@ def log(message: str, *, debug: bool = False) -> None:
 
 
 def emit_error(error: ChiftCliError, output: OutputFormat = "json") -> None:
-    payload = {
+    payload: dict[str, Any] = {
         "error": {
             "message": error.message,
             "type": error.__class__.__name__,
+            "exit_code": error.exit_code,
             "details": error.details,
         }
     }
+    if "status_code" in error.details:
+        payload["error"]["status_code"] = error.details["status_code"]
     if output == "json":
         print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
     else:

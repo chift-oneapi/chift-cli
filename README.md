@@ -83,21 +83,28 @@ uv run chift auth check
 
 ## Environment
 
-Environment variables are loaded once at process startup through `pydantic-settings`.
+Environment variables are loaded once at process startup through `pydantic-settings`. Place them in a `.env` file in your working directory or export them in your shell. See `.env.example` for a template.
 
-Common settings:
+Key settings:
 
 ```bash
-CHIFT_API_BASE_URL=http://chift.localhost:8000
-CHIFT_OPENAPI_URL=http://chift.localhost:8000/openapi.json
-CHIFT_CONFIG_DIR=/tmp/chift-config
-CHIFT_CACHE_DIR=/tmp/chift-cache
+# API endpoint (defaults to https://api.chift.eu)
+CHIFT_API_BASE_URL=https://api.chift.eu
+
+# Default consumer — avoids passing consumer_id on every command
+CHIFT_CONSUMER_ID=<consumer_id>
+
+# Restrict which operation classes the CLI will execute
 CHIFT_ALLOWED_OPERATIONS=read,write
+
+# Show hidden endpoint groups
+CHIFT_SHOW_PLATFORM_ENDPOINTS=1   # exposes consumers, integrations
+CHIFT_SHOW_INTERNAL_ENDPOINTS=1   # exposes general, datastores, syncs, issues, m-c-p, webhooks
 ```
 
 If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
 
-Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: an operation is `read` when any of its scopes ends in `.read`, otherwise broad-scoped non-`DELETE` operations are `write` and broad-scoped `DELETE` operations are `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST`, `PUT`, and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
+Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: read-only scopes allow `read`, broad scopes allow `write`, and broad `DELETE` operations require `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST` and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
 
 ## Schema Cache
 
@@ -117,51 +124,83 @@ uv run chift accounting suppliers --help
 
 ## Endpoint Inputs
 
-`consumer_id` is treated as route context and can be passed as the first positional value:
+### Discovering what an endpoint needs
+
+Use `--help` to see available commands at each level:
 
 ```bash
+uv run chift --help
+uv run chift accounting --help
+uv run chift accounting suppliers --help
+```
+
+Run a command without required inputs and the CLI prints a usage hint and the merged JSON schema of expected parameters:
+
+```bash
+uv run chift accounting suppliers get
+# => prints usage + schema showing required fields
+```
+
+Get only the schema without executing:
+
+```bash
+uv run chift accounting suppliers get --schema
+```
+
+### Passing inputs
+
+`consumer_id` is treated as route context. Set it once via env var or pass it as the first positional argument:
+
+```bash
+export CHIFT_CONSUMER_ID=<consumer_id>
+uv run chift accounting folders list
+
+# or inline:
 uv run chift accounting folders list <consumer_id>
 ```
 
-Other inputs are passed as normal `KEY=VALUE` values:
+Other path and query parameters are passed as `KEY=VALUE` positional values or with `--param`:
 
 ```bash
-uv run chift accounting suppliers get <consumer_id> supplier_id=<supplier_id> folder_id=<folder_id>
-```
+uv run chift accounting suppliers get <consumer_id> supplier_id=<supplier_id>
 
-or with `--param`:
-
-```bash
 uv run chift accounting suppliers get <consumer_id> \
   --param supplier_id=<supplier_id> \
   --param folder_id=<folder_id>
 ```
 
-`--param` and positional values are decoded as JSON when they look like a JSON literal (`true`, `false`, `null`) or start with `[` / `{`, so list and object body fields can be passed without `--json`:
+### Posting data
+
+For `POST` and `PATCH` operations pass a JSON body with `--json`, or use `KEY=VALUE` pairs which are merged into the request body:
 
 ```bash
-uv run chift accounting suppliers create <consumer_id> --force \
-  --param name=Acme \
-  --param 'addresses=[{"address_type":"main","country":"BE","street":"...","city":"...","postal_code":"..."}]' \
-  --param active=true
+# Using KEY=VALUE pairs (merged into JSON body)
+uv run chift accounting suppliers create <consumer_id> \
+  --force \
+  name="Acme Corp" \
+  currency_code=EUR
+
+# Using raw JSON
+uv run chift accounting suppliers create <consumer_id> \
+  --force \
+  --json '{"name": "Acme Corp", "currency_code": "EUR"}'
 ```
 
-For full request bodies use `--json`. A required body field is treated as provided when its key is in the parsed `--json` object, so `--json` alone is enough for endpoints with required body fields:
+Mutating operations (`POST`, `PATCH`, `DELETE`) require `--force` to prevent accidental writes.
+
+### Multiple parameters
+
+Repeat `--param` or use `KEY=VALUE` pairs for endpoints with multiple inputs:
 
 ```bash
-uv run chift accounting suppliers create <consumer_id> --force \
-  --json '{"name":"Acme","addresses":[{...}]}'
+uv run chift accounting suppliers list <consumer_id> page=2 size=50
+
+uv run chift accounting invoices get <consumer_id> \
+  --param invoice_id=<id> \
+  --param include_lines=true
 ```
 
-The CLI uses the OpenAPI schema to route values internally to path, query, or JSON body fields. Unknown params fail before the request is sent.
-
-If required input is missing, the CLI prints a short usage hint. If endpoint-specific params are also required, it prints one merged JSON schema for those params.
-
-Get only the merged input schema:
-
-```bash
-uv run chift accounting suppliers get --schema
-```
+The CLI routes each parameter to the correct location (path, query, or body) based on the OpenAPI schema. Unknown parameters are rejected before the request is sent.
 
 ## Output
 
@@ -191,14 +230,12 @@ uv run chift accounting folders list <consumer_id> --debug
 
 ```bash
 uv run chift accounting folders list <consumer_id> --fields id,name,parent.id
-uv run chift accounting suppliers get <consumer_id> supplier_id=<id> --fields id,addresses.0.country
 uv run chift accounting folders list <consumer_id> --filter name=Sales
-uv run chift accounting clients list <consumer_id> --filter is_company=true --filter parent=null
 ```
 
-`--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`. Nested paths can include numeric indices to descend into arrays (`addresses.0.country`).
+`--fields` keeps selected fields after the response is received. For paginated responses (`{items, page, size, total}`) it is applied to each entry in `items`.
 
-`--filter` filters list responses after the response is received. Multiple filters are ANDed together. Booleans and `null` are matched case-insensitively against their lowercase JSON form (`is_company=true`, `parent=null`). For paginated responses it filters `items` and updates `total`.
+`--filter` filters list responses after the response is received. Multiple filters are ANDed together. For paginated responses it filters `items` and updates `total`.
 
 Pagination uses the API's own `page` and `size` query parameters; pass them as endpoint inputs:
 

@@ -235,13 +235,13 @@ def test_operation_classification_unifies_two_part_and_three_part_scopes() -> No
             }
         }
     }
-    list_op = find_operation("pos", "customers", "list", schema)
-    create_op = find_operation("pos", "customers", "create", schema)
+    list_op = find_operation("point-of-sale", "customers", "list", schema)
+    create_op = find_operation("point-of-sale", "customers", "create", schema)
 
     assert list_op is not None
     assert create_op is not None
-    assert (list_op.vertical, list_op.entity) == ("pos", "customers")
-    assert (create_op.vertical, create_op.entity) == ("pos", "customers")
+    assert (list_op.vertical, list_op.entity) == ("point-of-sale", "customers")
+    assert (create_op.vertical, create_op.entity) == ("point-of-sale", "customers")
 
 
 def test_operation_classification_falls_back_to_path_without_tags_or_scopes() -> None:
