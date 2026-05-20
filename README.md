@@ -126,13 +126,16 @@ uv run chift accounting suppliers --help
 
 ### Discovering what an endpoint needs
 
-Use `--help` to see available commands at each level:
+Use `--next` at any level to find out what to do next:
 
 ```bash
-uv run chift --help
-uv run chift accounting --help
-uv run chift accounting suppliers --help
+uv run chift --next                              # list available verticals
+uv run chift accounting --next                   # list entities in that vertical
+uv run chift accounting suppliers --next         # list commands for that entity
+uv run chift accounting suppliers get --next     # show the input schema for that command
 ```
+
+`--next` always delegates to the most useful view at that level: `--help` for navigation, `--schema` for endpoint inputs.
 
 Run a command without required inputs and the CLI prints a usage hint and the merged JSON schema of expected parameters:
 

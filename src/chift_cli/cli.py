@@ -633,4 +633,8 @@ def main() -> None:
         raise SystemExit(exc.exit_code) from None
 
 
-register_dynamic_commands()
+try:
+    register_dynamic_commands()
+except ChiftCliError as _exc:
+    emit_error(_exc)
+    raise SystemExit(_exc.exit_code) from None

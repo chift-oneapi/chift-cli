@@ -22,85 +22,6 @@ _BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()
 _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
 
 
-BUILTIN_SCHEMA: dict[str, Any] = {
-    "openapi": "3.1.0",
-    "info": {"title": "Chift API", "version": "1.0.0"},
-    "servers": [{"url": "https://api.chift.eu"}],
-    "paths": {
-        "/token": {
-            "post": {
-                "tags": ["General"],
-                "summary": "Get access token",
-                "operationId": "generate_access_token_token_post",
-                "security": [],
-            }
-        },
-        "/consumers": {
-            "get": {
-                "tags": ["Consumers"],
-                "summary": "Get consumers",
-                "operationId": "consumers_get_consumers",
-                "parameters": [
-                    {
-                        "name": "search",
-                        "in": "query",
-                        "required": False,
-                        "schema": {"type": "string"},
-                    },
-                    {
-                        "name": "internal_reference",
-                        "in": "query",
-                        "required": False,
-                        "schema": {"type": "string"},
-                    },
-                ],
-            },
-            "post": {
-                "tags": ["Consumers"],
-                "summary": "Create new consumer",
-                "operationId": "consumers_create_consumer",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/PostConsumerItem"}
-                        }
-                    },
-                },
-            },
-        },
-        "/consumers/{consumer_id}": {
-            "get": {
-                "tags": ["Consumers"],
-                "summary": "Get one consumer",
-                "operationId": "consumers_get_consumer",
-                "parameters": [
-                    {
-                        "name": "consumer_id",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string"},
-                    }
-                ],
-            },
-            "delete": {
-                "tags": ["Consumers"],
-                "summary": "Delete one consumer",
-                "operationId": "consumers_delete_consumer",
-                "parameters": [
-                    {
-                        "name": "consumer_id",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string"},
-                    }
-                ],
-            },
-        },
-    },
-    "components": {"schemas": {}},
-}
-
 
 @dataclass(frozen=True)
 class Operation:
@@ -140,16 +61,8 @@ def load_schema() -> dict[str, Any]:
         data = json.loads(path.read_text())
         refresh_schema_in_background_if_stale()
         return data
-    try:
-        _, data = update_schema()
-        return data
-    except RetryRecommendedError as exc:
-        print(
-            f"chift: could not fetch OpenAPI schema ({exc.message}); "
-            "using minimal built-in schema. Run `chift schema update` once the API is reachable.",
-            file=sys.stderr,
-        )
-    return BUILTIN_SCHEMA
+    _, data = update_schema()
+    return data
 
 
 def save_schema(schema: dict[str, Any], path: Path | None = None) -> Path:
