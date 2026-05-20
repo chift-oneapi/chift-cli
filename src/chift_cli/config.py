@@ -14,7 +14,7 @@ APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
 DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS = 7 * 24 * 60 * 60
-INTERNAL_ENDPOINT_VERTICALS = {
+INTERNAL_ENDPOINTS = {
     "datastores",
     "general",
     "issues",
@@ -22,7 +22,7 @@ INTERNAL_ENDPOINT_VERTICALS = {
     "m-c-p",
     "webhooks",
 }
-PLATFORM_CONFIG_VERTICALS = {"consumers", "integrations"}
+PLATFORM_ENDPOINTS = {"consumers", "integrations", "connections"}
 
 
 class ChiftSettings(BaseSettings):
@@ -127,19 +127,11 @@ def get_openapi_url(config: dict[str, Any] | None = None) -> str:
     )
 
 
-def show_internal_endpoints() -> bool:
-    return settings.show_internal_endpoints
-
-
-def show_platform_endpoints() -> bool:
-    return settings.show_platform_endpoints
-
-
 def endpoint_visible(vertical: str) -> bool:
-    if vertical in INTERNAL_ENDPOINT_VERTICALS:
-        return show_internal_endpoints()
-    if vertical in PLATFORM_CONFIG_VERTICALS:
-        return show_platform_endpoints()
+    if vertical in INTERNAL_ENDPOINTS:
+        return settings.show_internal_endpoints
+    if vertical in PLATFORM_ENDPOINTS:
+        return settings.show_platform_endpoints
     return True
 
 

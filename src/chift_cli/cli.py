@@ -10,8 +10,8 @@ from .auth_form import prompt_auth_credentials
 from .client import execute_operation, parse_json_body
 from .config import (
     ApiKeyCredentials,
-    INTERNAL_ENDPOINT_VERTICALS,
-    PLATFORM_CONFIG_VERTICALS,
+    INTERNAL_ENDPOINTS,
+    PLATFORM_ENDPOINTS,
     endpoint_visible,
     load_api_key_credentials,
     save_api_key_credentials,
@@ -25,6 +25,7 @@ from .schema import (
     Operation,
     iter_operations,
     load_schema,
+    resolve_refs_deep,
     schema_age_seconds,
     search_schema,
     tree,
@@ -33,7 +34,7 @@ from .schema import (
 
 
 app = typer.Typer(
-    no_args_is_help=True,
+    no_args_is_help=False,
     help="CLI for the Chift API.",
     rich_markup_mode=None,
 )
@@ -50,6 +51,19 @@ schema_app = typer.Typer(
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(schema_app, name="schema")
+
+
+@app.callback(invoke_without_command=True)
+def app_callback(
+    ctx: typer.Context,
+    next_step: Annotated[
+        bool,
+        typer.Option("--next", help="Show what to do next."),
+    ] = False,
+) -> None:
+    if next_step or ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(0)
 
 
 OutputOption = Annotated[
@@ -97,9 +111,7 @@ def allowed_operation_filter() -> set[str] | None:
 
 
 def operation_uses_allowed_operations(operation: Operation) -> bool:
-    return operation.vertical not in (
-        INTERNAL_ENDPOINT_VERTICALS | PLATFORM_CONFIG_VERTICALS
-    )
+    return operation.vertical not in (INTERNAL_ENDPOINTS | PLATFORM_ENDPOINTS)
 
 
 def group_with_successful_help(*, help: str) -> typer.Typer:
@@ -182,7 +194,7 @@ def _input_values_from_args(
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
     if len(unnamed) > len(missing_path_names):
-        extras = unnamed[len(missing_path_names):]
+        extras = unnamed[len(missing_path_names) :]
         raise ChiftCliError(
             f"Unexpected positional argument `{extras[0]}`. "
             "Pass endpoint inputs as KEY=VALUE.",
@@ -227,6 +239,7 @@ def _display_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def input_schema(operation: Operation) -> dict[str, Any]:
+    document = {"components": operation.components}
     properties: dict[str, Any] = {}
     required: list[str] = []
     for parameter in operation.raw.get("parameters") or []:
@@ -234,18 +247,19 @@ def input_schema(operation: Operation) -> dict[str, Any]:
         location = parameter.get("in")
         if not isinstance(name, str) or location not in {"path", "query"}:
             continue
-        properties[name] = _json_schema_for_parameter(parameter)
+        param_schema = _json_schema_for_parameter(parameter)
+        properties[name] = resolve_refs_deep(param_schema, document)
         if parameter.get("required"):
             required.append(name)
     body_schema = _request_body_schema(operation)
     if body_schema.get("type") == "object":
         for name, schema in (body_schema.get("properties") or {}).items():
-            properties.setdefault(name, schema)
+            properties.setdefault(name, resolve_refs_deep(schema, document))
         for name in body_schema.get("required") or []:
             if name not in required:
                 required.append(name)
     elif body_schema:
-        properties["body"] = body_schema
+        properties["body"] = resolve_refs_deep(body_schema, document)
         if (operation.raw.get("requestBody") or {}).get("required"):
             required.append("body")
     schema: dict[str, Any] = {
@@ -461,6 +475,10 @@ def operation_callback(operation: Operation):
                 "--schema", help="Return this endpoint schema instead of executing it."
             ),
         ] = False,
+        next_step: Annotated[
+            bool,
+            typer.Option("--next", help="Show what inputs this endpoint needs to run."),
+        ] = False,
         force: Annotated[
             bool, typer.Option("--force", help="Required for mutating operations.")
         ] = False,
@@ -488,7 +506,7 @@ def operation_callback(operation: Operation):
                     },
                 )
             )
-        if schema:
+        if next_step or schema:
             emit(_display_schema(input_schema(operation)), output)
             return
         if operation.method.lower() in DESTRUCTIVE_METHODS and not force:
@@ -537,24 +555,71 @@ def operation_callback(operation: Operation):
 
 
 def register_dynamic_commands() -> None:
+    all_ops = visible_operations()
     vertical_apps: dict[str, typer.Typer] = {}
     entity_apps: dict[tuple[str, str], typer.Typer] = {}
-    for operation in visible_operations():
-        vertical_app = vertical_apps.get(operation.vertical)
+    for operation in all_ops:
+        vertical = operation.vertical
+        vertical_app = vertical_apps.get(vertical)
         if vertical_app is None:
-            vertical_app = group_with_successful_help(
-                help=f"{operation.vertical} endpoints."
+            vertical_app = typer.Typer(
+                no_args_is_help=False,
+                invoke_without_command=True,
+                help=f"{vertical} endpoints.",
+                rich_markup_mode=None,
             )
-            app.add_typer(vertical_app, name=operation.vertical)
-            vertical_apps[operation.vertical] = vertical_app
-        entity_key = (operation.vertical, operation.entity)
+
+            def _make_vertical_callback(v: str) -> Any:
+                def vertical_callback(
+                    ctx: typer.Context,
+                    next_step: Annotated[
+                        bool,
+                        typer.Option("--next", help="Show what to do next."),
+                    ] = False,
+                ) -> None:
+                    if next_step or ctx.invoked_subcommand is None:
+                        typer.echo(ctx.get_help())
+                        raise typer.Exit(0)
+
+                return vertical_callback
+
+            vertical_app.callback(invoke_without_command=True)(
+                _make_vertical_callback(vertical)
+            )
+            app.add_typer(vertical_app, name=vertical)
+            vertical_apps[vertical] = vertical_app
+
+        entity_key = (vertical, operation.entity)
         entity_app = entity_apps.get(entity_key)
         if entity_app is None:
-            entity_app = group_with_successful_help(
-                help=f"{operation.entity} endpoints."
+            entity = operation.entity
+
+            def _make_entity_callback(v: str, e: str) -> Any:
+                def entity_callback(
+                    ctx: typer.Context,
+                    next_step: Annotated[
+                        bool,
+                        typer.Option("--next", help="Show what to do next."),
+                    ] = False,
+                ) -> None:
+                    if next_step or ctx.invoked_subcommand is None:
+                        typer.echo(ctx.get_help())
+                        raise typer.Exit(0)
+
+                return entity_callback
+
+            entity_app = typer.Typer(
+                no_args_is_help=False,
+                invoke_without_command=True,
+                help=f"{entity} endpoints.",
+                rich_markup_mode=None,
             )
-            vertical_app.add_typer(entity_app, name=operation.entity)
+            entity_app.callback(invoke_without_command=True)(
+                _make_entity_callback(vertical, entity)
+            )
+            vertical_app.add_typer(entity_app, name=entity)
             entity_apps[entity_key] = entity_app
+
         entity_app.command(
             operation.command, help=f"{operation.method} {operation.path}"
         )(operation_callback(operation))

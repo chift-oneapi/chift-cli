@@ -41,15 +41,32 @@ BUILTIN_SCHEMA: dict[str, Any] = {
                 "summary": "Get consumers",
                 "operationId": "consumers_get_consumers",
                 "parameters": [
-                    {"name": "search", "in": "query", "required": False, "schema": {"type": "string"}},
-                    {"name": "internal_reference", "in": "query", "required": False, "schema": {"type": "string"}},
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                    },
+                    {
+                        "name": "internal_reference",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                    },
                 ],
             },
             "post": {
                 "tags": ["Consumers"],
                 "summary": "Create new consumer",
                 "operationId": "consumers_create_consumer",
-                "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PostConsumerItem"}}}},
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/PostConsumerItem"}
+                        }
+                    },
+                },
             },
         },
         "/consumers/{consumer_id}": {
@@ -57,13 +74,27 @@ BUILTIN_SCHEMA: dict[str, Any] = {
                 "tags": ["Consumers"],
                 "summary": "Get one consumer",
                 "operationId": "consumers_get_consumer",
-                "parameters": [{"name": "consumer_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "parameters": [
+                    {
+                        "name": "consumer_id",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string"},
+                    }
+                ],
             },
             "delete": {
                 "tags": ["Consumers"],
                 "summary": "Delete one consumer",
                 "operationId": "consumers_delete_consumer",
-                "parameters": [{"name": "consumer_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "parameters": [
+                    {
+                        "name": "consumer_id",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string"},
+                    }
+                ],
             },
         },
     },
@@ -93,7 +124,6 @@ class OperationClassification:
 
 _VERTICAL_ALIASES: dict[str, str] = {
     "pos": "point-of-sale",
-    "p-o-s": "point-of-sale",
 }
 
 
@@ -101,8 +131,7 @@ def slugify(value: str) -> str:
     value = value.replace("_", "-")
     value = re.sub(r"(?<!^)(?=[A-Z])", "-", value).lower()
     value = re.sub(r"[^a-z0-9-]+", "-", value)
-    result = re.sub(r"-+", "-", value).strip("-") or "root"
-    return _VERTICAL_ALIASES.get(result, result)
+    return _VERTICAL_ALIASES.get(value, value)
 
 
 def load_schema() -> dict[str, Any]:
@@ -136,7 +165,10 @@ def update_schema(*, timeout: float = 30.0) -> tuple[Path, dict[str, Any]]:
         response = httpx.get(url, timeout=timeout)
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise RetryRecommendedError("Could not update the Chift OpenAPI schema.", details={"url": url, "reason": str(exc)}) from exc
+        raise RetryRecommendedError(
+            "Could not update the Chift OpenAPI schema.",
+            details={"url": url, "reason": str(exc)},
+        ) from exc
     data = response.json()
     return save_schema(data), data
 
@@ -192,7 +224,9 @@ def schema_age_seconds() -> int | None:
 
 
 def entity_from_path(path: str) -> str:
-    parts = [part for part in path.strip("/").split("/") if part and not part.startswith("{")]
+    parts = [
+        part for part in path.strip("/").split("/") if part and not part.startswith("{")
+    ]
     if not parts:
         return "root"
     return slugify(parts[-1])
@@ -212,7 +246,9 @@ def has_read_scope(scopes: tuple[str, ...]) -> bool:
     return any(scope.split(".")[-1] == "read" for scope in scopes)
 
 
-def classification_from_tags(operation: dict[str, Any]) -> OperationClassification | None:
+def classification_from_tags(
+    operation: dict[str, Any],
+) -> OperationClassification | None:
     tags = [
         slugify(tag)
         for tag in operation.get("tags") or []
@@ -223,7 +259,9 @@ def classification_from_tags(operation: dict[str, Any]) -> OperationClassificati
     return OperationClassification(vertical=tags[0], entity=tags[1])
 
 
-def classification_from_scopes(scopes: tuple[str, ...]) -> OperationClassification | None:
+def classification_from_scopes(
+    scopes: tuple[str, ...],
+) -> OperationClassification | None:
     candidates: dict[tuple[str, str], tuple[int, int]] = {}
     for scope in scopes:
         parts = scope.split(".")
@@ -248,7 +286,9 @@ def classification_from_scopes(scopes: tuple[str, ...]) -> OperationClassificati
     return OperationClassification(vertical=vertical, entity=entity)
 
 
-def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]) -> OperationClassification | None:
+def classification_from_single_tag_and_path(
+    path: str, operation: dict[str, Any]
+) -> OperationClassification | None:
     tags = [
         slugify(tag)
         for tag in operation.get("tags") or []
@@ -274,7 +314,9 @@ def classification_from_path(path: str) -> OperationClassification:
     return OperationClassification(vertical=parts[0], entity=parts[-1])
 
 
-def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
+def classify_operation(
+    path: str, operation: dict[str, Any], scopes: tuple[str, ...]
+) -> OperationClassification:
     return (
         classification_from_scopes(scopes)
         or classification_from_tags(operation)
@@ -295,6 +337,34 @@ def resolve_ref(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, A
     return current if isinstance(current, dict) else schema
 
 
+def resolve_refs_deep(
+    schema: Any, document: dict[str, Any], _seen: frozenset[str] | None = None
+) -> Any:
+    if not isinstance(schema, dict):
+        return schema
+    seen = _seen or frozenset()
+    ref = schema.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/") and ref not in seen:
+        resolved = resolve_ref(schema, document)
+        if resolved is not schema:
+            return resolve_refs_deep(resolved, document, seen | {ref})
+        return schema
+    result = {}
+    for key, value in schema.items():
+        if isinstance(value, dict):
+            result[key] = resolve_refs_deep(value, document, seen)
+        elif isinstance(value, list):
+            result[key] = [
+                resolve_refs_deep(item, document, seen)
+                if isinstance(item, dict)
+                else item
+                for item in value
+            ]
+        else:
+            result[key] = value
+    return result
+
+
 def response_schema(operation: dict[str, Any]) -> dict[str, Any]:
     responses = operation.get("responses") or {}
     for status_code in ("200", "201", "202"):
@@ -311,10 +381,19 @@ def response_is_collection(operation: dict[str, Any], document: dict[str, Any]) 
         return True
     properties = schema.get("properties") or {}
     page_fields = {"items", "page", "size", "total"}
-    return page_fields.issubset(properties) or page_fields.issubset(set(schema.get("required") or []))
+    return page_fields.issubset(properties) or page_fields.issubset(
+        set(schema.get("required") or [])
+    )
 
 
-def command_name(method: str, path: str, operation: dict[str, Any], scopes: tuple[str, ...], document: dict[str, Any], used: set[str]) -> str:
+def command_name(
+    method: str,
+    path: str,
+    operation: dict[str, Any],
+    scopes: tuple[str, ...],
+    document: dict[str, Any],
+    used: set[str],
+) -> str:
     if has_read_scope(scopes):
         base = "list" if response_is_collection(operation, document) else "get"
     elif method == "get":
@@ -332,7 +411,9 @@ def command_name(method: str, path: str, operation: dict[str, Any], scopes: tupl
     if base not in used:
         used.add(base)
         return base
-    summary = slugify(operation.get("summary") or operation.get("operationId") or method)
+    summary = slugify(
+        operation.get("summary") or operation.get("operationId") or method
+    )
     name = summary
     index = 2
     while name in used:
@@ -374,10 +455,14 @@ def iter_operations(schema: dict[str, Any] | None = None) -> list[Operation]:
     return operations
 
 
-def tree(schema: dict[str, Any] | None = None) -> dict[str, dict[str, list[dict[str, str]]]]:
+def tree(
+    schema: dict[str, Any] | None = None,
+) -> dict[str, dict[str, list[dict[str, str]]]]:
     result: dict[str, dict[str, list[dict[str, str]]]] = {}
     for operation in iter_operations(schema):
-        result.setdefault(operation.vertical, {}).setdefault(operation.entity, []).append(
+        result.setdefault(operation.vertical, {}).setdefault(
+            operation.entity, []
+        ).append(
             {
                 "command": operation.command,
                 "method": operation.method,
@@ -390,20 +475,32 @@ def tree(schema: dict[str, Any] | None = None) -> dict[str, dict[str, list[dict[
     return result
 
 
-def find_operation(vertical: str, entity: str, command: str, schema: dict[str, Any] | None = None) -> Operation | None:
+def find_operation(
+    vertical: str, entity: str, command: str, schema: dict[str, Any] | None = None
+) -> Operation | None:
     for operation in iter_operations(schema):
-        if operation.vertical == vertical and operation.entity == entity and operation.command == command:
+        if (
+            operation.vertical == vertical
+            and operation.entity == entity
+            and operation.command == command
+        ):
             return operation
     return None
 
 
-def search_schema(query: str, schema: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def search_schema(
+    query: str, schema: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     needle = query.lower()
     data = schema or load_schema()
     matches: list[dict[str, Any]] = []
     for operation in iter_operations(data):
         haystack = json.dumps(operation.raw, sort_keys=True).lower()
-        if needle in haystack or needle in operation.path.lower() or needle in operation.summary.lower():
+        if (
+            needle in haystack
+            or needle in operation.path.lower()
+            or needle in operation.summary.lower()
+        ):
             matches.append(
                 {
                     "vertical": operation.vertical,
