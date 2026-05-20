@@ -41,6 +41,15 @@ def parse_key_value(
     return result
 
 
+def _coerce_input_values(values: dict[str, Any] | None) -> dict[str, Any]:
+    if not values:
+        return {}
+    return {
+        key: _coerce_param_value(value) if isinstance(value, str) else value
+        for key, value in values.items()
+    }
+
+
 def parse_json_body(value: str | None) -> Any:
     if not value:
         return None
@@ -56,7 +65,7 @@ def _query_parameter_names(operation: Operation) -> set[str]:
 
 def build_request(operation: Operation, *, params: list[str] | None, body: str | None, input_values: dict[str, Any] | None = None) -> dict[str, Any]:
     all_params = parse_key_value(params, coerce=True)
-    all_inputs = {**(input_values or {}), **all_params}
+    all_inputs = {**_coerce_input_values(input_values), **all_params}
     query_names = _query_parameter_names(operation)
     path = operation.path
     for name in path_parameter_names(path):

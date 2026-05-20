@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from chift_cli import config
+from chift_cli.cli import _input_values_from_args
 from chift_cli.client import apply_fields, apply_filter, build_request
 from chift_cli.errors import ChiftCliError
 from chift_cli.schema import Operation
@@ -109,6 +110,90 @@ def test_apply_filter_normalizes_booleans_and_null() -> None:
 
     only_root = apply_filter(data, ["parent=null"])
     assert [item["name"] for item in only_root["items"]] == ["Alpha"]
+
+
+def test_build_request_coerces_input_values_for_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    op = Operation(
+        vertical="accounting",
+        entity="suppliers",
+        command="create",
+        method="POST",
+        path="/consumers/{consumer_id}/accounting/suppliers",
+        operation_id="",
+        summary="",
+        scopes=(),
+        raw={
+            "parameters": [
+                {
+                    "name": "consumer_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+        },
+    )
+    request = build_request(
+        op,
+        params=None,
+        body=None,
+        input_values={
+            "consumer_id": "c1",
+            "name": "Acme",
+            "addresses": '[{"country":"BE"}]',
+            "active": "true",
+        },
+    )
+    assert request["json"] == {
+        "name": "Acme",
+        "addresses": [{"country": "BE"}],
+        "active": True,
+    }
+
+
+def test_positional_key_value_inputs_coerce_like_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    op = Operation(
+        vertical="accounting",
+        entity="suppliers",
+        command="create",
+        method="POST",
+        path="/consumers/{consumer_id}/accounting/suppliers",
+        operation_id="",
+        summary="",
+        scopes=(),
+        raw={
+            "parameters": [
+                {
+                    "name": "consumer_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+        },
+    )
+    input_values = _input_values_from_args(
+        op, ["c1", "active=true", 'addresses=[{"country":"BE"}]'], None
+    )
+    request = build_request(op, params=None, body=None, input_values=input_values)
+    assert request["json"] == {
+        "addresses": [{"country": "BE"}],
+        "active": True,
+    }
 
 
 def test_build_request_coerces_json_param_values_for_body(monkeypatch: pytest.MonkeyPatch) -> None:
