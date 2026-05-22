@@ -18,6 +18,7 @@ chift = "chift_cli.cli:main"
 [dependency-groups]
 dev = [
   "pytest>=8.3.3",
+  "pyinstaller>=6.0",
 ]
 
 [build-system]
