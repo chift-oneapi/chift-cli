@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from typing import Annotated, Any
 
 import typer
@@ -623,6 +624,31 @@ def register_dynamic_commands() -> None:
         entity_app.command(
             operation.command, help=f"{operation.method} {operation.path}"
         )(operation_callback(operation))
+
+
+@app.command("update", help="Update chift-cli to the latest version via uv.")
+def update() -> None:
+    if not _uv_available():
+        typer.secho(
+            "uv is not available. Install it from https://astral.sh/uv and retry.",
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+    typer.echo("Updating chift-cli...")
+    result = subprocess.run(["uv", "tool", "upgrade", "chift-cli"], check=False)
+    if result.returncode != 0:
+        typer.secho("Update failed.", err=True, fg=typer.colors.RED)
+        raise typer.Exit(result.returncode)
+    typer.secho("chift-cli updated successfully.", fg=typer.colors.GREEN)
+
+
+def _uv_available() -> bool:
+    try:
+        subprocess.run(["uv", "--version"], check=True, capture_output=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
 def main() -> None:
