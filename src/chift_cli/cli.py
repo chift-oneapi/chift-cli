@@ -124,8 +124,14 @@ def group_with_successful_help(*, help: str) -> typer.Typer:
     )
 
     @group.callback()
-    def show_help_on_empty_group(ctx: typer.Context) -> None:
-        if ctx.invoked_subcommand is None:
+    def show_help_on_empty_group(
+        ctx: typer.Context,
+        next_step: Annotated[
+            bool,
+            typer.Option("--next", help="Show what to do next."),
+        ] = False,
+    ) -> None:
+        if next_step or ctx.invoked_subcommand is None:
             typer.echo(ctx.get_help())
             raise typer.Exit(0)
 
@@ -563,30 +569,7 @@ def register_dynamic_commands() -> None:
         vertical = operation.vertical
         vertical_app = vertical_apps.get(vertical)
         if vertical_app is None:
-            vertical_app = typer.Typer(
-                no_args_is_help=False,
-                invoke_without_command=True,
-                help=f"{vertical} endpoints.",
-                rich_markup_mode=None,
-            )
-
-            def _make_vertical_callback(v: str) -> Any:
-                def vertical_callback(
-                    ctx: typer.Context,
-                    next_step: Annotated[
-                        bool,
-                        typer.Option("--next", help="Show what to do next."),
-                    ] = False,
-                ) -> None:
-                    if next_step or ctx.invoked_subcommand is None:
-                        typer.echo(ctx.get_help())
-                        raise typer.Exit(0)
-
-                return vertical_callback
-
-            vertical_app.callback(invoke_without_command=True)(
-                _make_vertical_callback(vertical)
-            )
+            vertical_app = group_with_successful_help(help=f"{vertical} endpoints.")
             app.add_typer(vertical_app, name=vertical)
             vertical_apps[vertical] = vertical_app
 
@@ -594,30 +577,7 @@ def register_dynamic_commands() -> None:
         entity_app = entity_apps.get(entity_key)
         if entity_app is None:
             entity = operation.entity
-
-            def _make_entity_callback(v: str, e: str) -> Any:
-                def entity_callback(
-                    ctx: typer.Context,
-                    next_step: Annotated[
-                        bool,
-                        typer.Option("--next", help="Show what to do next."),
-                    ] = False,
-                ) -> None:
-                    if next_step or ctx.invoked_subcommand is None:
-                        typer.echo(ctx.get_help())
-                        raise typer.Exit(0)
-
-                return entity_callback
-
-            entity_app = typer.Typer(
-                no_args_is_help=False,
-                invoke_without_command=True,
-                help=f"{entity} endpoints.",
-                rich_markup_mode=None,
-            )
-            entity_app.callback(invoke_without_command=True)(
-                _make_entity_callback(vertical, entity)
-            )
+            entity_app = group_with_successful_help(help=f"{entity} endpoints.")
             vertical_app.add_typer(entity_app, name=entity)
             entity_apps[entity_key] = entity_app
 
