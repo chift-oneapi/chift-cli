@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv run pytest
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            expected_arch_pattern: "x86[-_]64"
+          - os: macos-13
+            target: darwin-x86_64
+            expected_arch_pattern: "x86[-_]64"
+          - os: macos-14-arm64
+            target: darwin-arm64
+            expected_arch_pattern: "arm64"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Build binary
+        run: |
+          uv sync --dev
+          uv run pyinstaller \
+            --onefile \
+            --name chift \
+            --collect-all chift_cli \
+            src/chift_cli/__main__.py
+
+      - name: Rename binary
+        run: mv dist/chift dist/chift-${{ matrix.target }}
+
+      - name: Verify binary architecture
+        run: |
+          file dist/chift-${{ matrix.target }}
+          file dist/chift-${{ matrix.target }} | grep -Eq "${{ matrix.expected_arch_pattern }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chift-${{ matrix.target }}
+          path: dist/chift-${{ matrix.target }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "chift-cli $GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/chift-linux-x86_64 \
+            dist/chift-darwin-x86_64 \
+            dist/chift-darwin-arm64

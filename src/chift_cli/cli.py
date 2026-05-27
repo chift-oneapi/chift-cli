@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from typing import Annotated, Any
 
 import typer
@@ -623,6 +624,45 @@ def register_dynamic_commands() -> None:
         entity_app.command(
             operation.command, help=f"{operation.method} {operation.path}"
         )(operation_callback(operation))
+
+
+INSTALL_SCRIPT_URL = (
+    "https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh"
+)
+
+
+@app.command("update", help="Update chift-cli to the latest version.")
+def update() -> None:
+    if not _curl_available():
+        typer.secho(
+            "curl is not available. Install it and retry.",
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+    typer.echo("Updating chift-cli...")
+    download = subprocess.run(
+        ["curl", "-fsSL", INSTALL_SCRIPT_URL],
+        check=False,
+        stdout=subprocess.PIPE,
+    )
+    if download.returncode != 0:
+        typer.secho("Update failed.", err=True, fg=typer.colors.RED)
+        raise typer.Exit(download.returncode)
+
+    result = subprocess.run(["sh"], input=download.stdout, check=False)
+    if result.returncode != 0:
+        typer.secho("Update failed.", err=True, fg=typer.colors.RED)
+        raise typer.Exit(result.returncode)
+    typer.secho("chift-cli updated successfully.", fg=typer.colors.GREEN)
+
+
+def _curl_available() -> bool:
+    try:
+        subprocess.run(["curl", "--version"], check=True, capture_output=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
 def main() -> None:
