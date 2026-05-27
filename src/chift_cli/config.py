@@ -9,7 +9,6 @@ from typing import Any
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
@@ -108,11 +107,7 @@ def save_config(data: dict[str, Any]) -> None:
 def get_api_base_url(config: dict[str, Any] | None = None) -> str:
     data = config if config is not None else load_config()
     configured = settings.api_base_url
-    return (
-        configured
-        if "api_base_url" in settings.model_fields_set
-        else data.get("api_base_url") or configured
-    )
+    return configured if "api_base_url" in settings.model_fields_set else data.get("api_base_url") or configured
 
 
 def get_openapi_url(config: dict[str, Any] | None = None) -> str:

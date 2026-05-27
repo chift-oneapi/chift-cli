@@ -1,0 +1,19 @@
+# Lint / Format for Python 3.11
+target-version = "py311"
+line-length = 120
+
+# Excluded files and directories
+exclude = [
+    # Directories
+    ".git",
+    "dist",
+    ".vscode",
+    "venv",
+    "__pypackages__",
+    # Files
+    "*.pyi",
+    "*.ipynb",
+]
+
+[lint]
+extend-select = ["I"]

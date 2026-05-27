@@ -9,7 +9,6 @@ import yaml
 
 from .errors import ChiftCliError
 
-
 OutputFormat = Literal["json", "yaml"]
 
 
@@ -40,4 +39,3 @@ def emit_error(error: ChiftCliError, output: OutputFormat = "json") -> None:
         print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
     else:
         print(yaml.safe_dump(payload, sort_keys=True), file=sys.stderr)
-

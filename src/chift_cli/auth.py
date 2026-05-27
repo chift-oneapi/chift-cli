@@ -16,7 +16,6 @@ from .config import (
 from .errors import AuthenticationError, RetryRecommendedError
 from .output import log
 
-
 TOKEN_REFRESH_SKEW_SECONDS = 60
 
 
@@ -62,18 +61,14 @@ def token_is_valid(token: Token | None) -> bool:
     return token.expires_on - TOKEN_REFRESH_SKEW_SECONDS > int(time.time())
 
 
-def fetch_token(
-    credentials: ApiKeyCredentials, *, timeout: float = 20.0, debug: bool = False
-) -> Token:
+def fetch_token(credentials: ApiKeyCredentials, *, timeout: float = 20.0, debug: bool = False) -> Token:
     url = f"{get_api_base_url().rstrip('/')}/token"
     payload = _auth_payload(credentials)
     log(f"POST {url}", debug=debug)
     try:
         response = httpx.post(url, json=payload, timeout=timeout)
     except httpx.HTTPError as exc:
-        raise RetryRecommendedError(
-            "Could not reach Chift token endpoint.", details={"reason": str(exc)}
-        ) from exc
+        raise RetryRecommendedError("Could not reach Chift token endpoint.", details={"reason": str(exc)}) from exc
     if response.status_code in {401, 403}:
         raise AuthenticationError(
             _auth_error_message(response),
@@ -94,9 +89,7 @@ def fetch_token(
         access_token=data["access_token"],
         token_type=data.get("token_type", "bearer"),
         expires_in=int(data.get("expires_in", 1800)),
-        expires_on=int(
-            data.get("expires_on") or (time.time() + int(data.get("expires_in", 1800)))
-        ),
+        expires_on=int(data.get("expires_on") or (time.time() + int(data.get("expires_in", 1800)))),
     )
     save_token(token)
     return token
@@ -108,7 +101,5 @@ def get_access_token(*, debug: bool = False) -> str:
         return token.access_token
     credentials = load_api_key_credentials()
     if not credentials:
-        raise AuthenticationError(
-            "No API credentials found. Run `chift auth setup` first."
-        )
+        raise AuthenticationError("No API credentials found. Run `chift auth setup` first.")
     return fetch_token(credentials, debug=debug).access_token

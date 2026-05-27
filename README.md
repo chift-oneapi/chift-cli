@@ -10,6 +10,17 @@ uv run chift --help
 uv run chift auth setup
 ```
 
+### VS Code
+
+Install the [Ruff extension](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff), then copy the example workspace files:
+
+```bash
+cp .vscode/settings.example.json .vscode/settings.json
+cp .vscode/launch.example.json .vscode/launch.json
+```
+
+`settings.json` enables format-on-save and import sorting via `ruff.toml`. `launch.json` includes debug configurations for the CLI, the current file, and pytest.
+
 ## Install From GitHub Releases
 
 Install the latest released binary:

@@ -13,11 +13,10 @@ from chift_cli.schema import (
     load_schema,
     response_is_collection,
     save_schema,
-    search_schema,
     schema_path,
+    search_schema,
     tree,
 )
-
 
 SAMPLE_SCHEMA = {
     "components": {
@@ -42,7 +41,9 @@ SAMPLE_SCHEMA = {
                 "tags": ["Consumers"],
                 "summary": "Get consumers",
                 "operationId": "consumers_get_consumers",
-                "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}
+                },
             },
             "post": {
                 "tags": ["Consumers"],
@@ -69,7 +70,9 @@ SAMPLE_SCHEMA = {
                 "tags": ["Accounting"],
                 "summary": "Get journal entries",
                 "operationId": "accounting_get_journal_entries",
-                "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}
+                },
             }
         },
         "/consumers/{consumer_id}/accounting/accounts/search": {
@@ -78,7 +81,9 @@ SAMPLE_SCHEMA = {
                 "summary": "Search accounts",
                 "operationId": "accounting_search_accounts",
                 "security": [{"mcp_auth": ["accounting.accounts.read"]}],
-                "responses": {"200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Account"}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Account"}}}}
+                },
             }
         },
         "/consumers/{consumer_id}/accounting/accounts": {
@@ -87,7 +92,9 @@ SAMPLE_SCHEMA = {
                 "summary": "Create account",
                 "operationId": "accounting_create_account",
                 "security": [{"mcp_auth": ["accounting.accounts.write"]}],
-                "responses": {"200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Account"}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Account"}}}}
+                },
             }
         },
         "/consumers/{consumer_id}/accounting/chart-of-accounts/balance": {
@@ -97,7 +104,11 @@ SAMPLE_SCHEMA = {
                 "operationId": "accounting_get_accounts_balances",
                 "security": [{"mcp_auth": ["accounting.ledger_accounts.read"]}],
                 "responses": {
-                    "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ChiftPage_AccountBalance_"}}}}
+                    "200": {
+                        "content": {
+                            "application/json": {"schema": {"$ref": "#/components/schemas/ChiftPage_AccountBalance_"}}
+                        }
+                    }
                 },
             }
         },
@@ -107,7 +118,9 @@ SAMPLE_SCHEMA = {
                 "summary": "Get tax rates",
                 "operationId": "generic_get_tax_rates",
                 "security": [{"mcp_auth": ["accounting.tax_rates.read"]}],
-                "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}
+                },
             }
         },
         "/consumers/{consumer_id}/accounting/vat-codes": {
@@ -116,17 +129,21 @@ SAMPLE_SCHEMA = {
                 "summary": "Get VAT codes",
                 "operationId": "tagged_get_vat_codes",
                 "security": [{"mcp_auth": ["banking.accounts.read"]}],
-                "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}
+                },
             }
         },
         "/consumers/{consumer_id}/payment/transactions": {
             "get": {
                 "summary": "Get payment transactions",
                 "operationId": "path_get_payment_transactions",
-                "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}},
+                "responses": {
+                    "200": {"content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}}
+                },
             }
         },
-    }
+    },
 }
 
 
@@ -213,11 +230,7 @@ def test_operation_classification_unifies_two_part_and_three_part_scopes() -> No
                     ],
                     "responses": {
                         "200": {
-                            "content": {
-                                "application/json": {
-                                    "schema": {"type": "array", "items": {"type": "object"}}
-                                }
-                            }
+                            "content": {"application/json": {"schema": {"type": "array", "items": {"type": "object"}}}}
                         }
                     },
                 },
@@ -226,11 +239,7 @@ def test_operation_classification_unifies_two_part_and_three_part_scopes() -> No
                     "summary": "Create customer",
                     "operationId": "pos_create_customer",
                     "security": [{"mcp_auth": ["pos", "pos.customers"]}],
-                    "responses": {
-                        "200": {
-                            "content": {"application/json": {"schema": {"type": "object"}}}
-                        }
-                    },
+                    "responses": {"200": {"content": {"application/json": {"schema": {"type": "object"}}}}},
                 },
             }
         }

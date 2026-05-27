@@ -1,0 +1,22 @@
+name: Lint and Format
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    name: Checking lint and formatting errors
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: "./src"
+          version: "0.9.0"
+
+      - run: ruff format --diff --config ${{ github.workspace }}/ruff.toml src tests
+      - run: ruff check --config ${{ github.workspace }}/ruff.toml src tests

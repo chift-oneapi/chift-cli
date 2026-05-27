@@ -13,7 +13,6 @@ from chift_cli.config import (
 )
 from chift_cli.errors import AuthenticationError
 
-
 runner = CliRunner()
 
 
@@ -39,10 +38,7 @@ def test_auth_check_help_describes_fresh_token_validation() -> None:
     normalized_stdout = " ".join(result.stdout.split())
 
     assert result.exit_code == 0
-    assert (
-        "Validate saved API credentials by fetching a fresh token."
-        in normalized_stdout
-    )
+    assert "Validate saved API credentials by fetching a fresh token." in normalized_stdout
     assert "instead of only inspecting the local token cache" in normalized_stdout
 
 
@@ -119,9 +115,7 @@ def test_auth_setup_errors_are_plain_text(monkeypatch, tmp_path) -> None:
     assert result.stderr == "Invalid Chift credentials.\n"
 
 
-def test_auth_setup_does_not_save_credentials_when_validation_fails(
-    monkeypatch, tmp_path
-) -> None:
+def test_auth_setup_does_not_save_credentials_when_validation_fails(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config.settings, "config_dir", str(tmp_path))
 
     def fake_fetch_token(credentials, *, debug=False):
