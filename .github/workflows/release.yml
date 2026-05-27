@@ -26,12 +26,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x86_64
-          - os: macos-latest
+            expected_arch_pattern: "x86[-_]64"
+          - os: macos-13
             target: darwin-x86_64
-            arch_flag: ""
-          - os: macos-latest
+            expected_arch_pattern: "x86[-_]64"
+          - os: macos-14-arm64
             target: darwin-arm64
-            arch_flag: ""
+            expected_arch_pattern: "arm64"
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -53,6 +54,11 @@ jobs:
 
       - name: Rename binary
         run: mv dist/chift dist/chift-${{ matrix.target }}
+
+      - name: Verify binary architecture
+        run: |
+          file dist/chift-${{ matrix.target }}
+          file dist/chift-${{ matrix.target }} | grep -Eq "${{ matrix.expected_arch_pattern }}"
 
       - uses: actions/upload-artifact@v4
         with:

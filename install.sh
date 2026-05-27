@@ -44,7 +44,7 @@ detect_target() {
 latest_version() {
     curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
         | grep '"tag_name"' \
-        | sed 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/'
+        | sed 's/.*"tag_name": *"//; s/^v//; s/".*//'
 }
 
 # ---------- main ----------

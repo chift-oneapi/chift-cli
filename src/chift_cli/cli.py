@@ -641,10 +641,16 @@ def update() -> None:
         )
         raise typer.Exit(1)
     typer.echo("Updating chift-cli...")
-    result = subprocess.run(
-        ["sh", "-c", f"curl -fsSL {INSTALL_SCRIPT_URL} | sh"],
+    download = subprocess.run(
+        ["curl", "-fsSL", INSTALL_SCRIPT_URL],
         check=False,
+        stdout=subprocess.PIPE,
     )
+    if download.returncode != 0:
+        typer.secho("Update failed.", err=True, fg=typer.colors.RED)
+        raise typer.Exit(download.returncode)
+
+    result = subprocess.run(["sh"], input=download.stdout, check=False)
     if result.returncode != 0:
         typer.secho("Update failed.", err=True, fg=typer.colors.RED)
         raise typer.Exit(result.returncode)
