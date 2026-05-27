@@ -64,6 +64,7 @@ main() {
         [ -n "$VERSION" ] || die "Could not determine latest version. Set CHIFT_VERSION to pin one."
         info "Latest version: $VERSION"
     fi
+    VERSION="${VERSION#v}"
 
     BINARY_NAME="chift-${TARGET}"
     BINARY_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${BINARY_NAME}"

@@ -10,7 +10,22 @@ uv run chift --help
 uv run chift auth setup
 ```
 
-## Local Install
+## Install From GitHub Releases
+
+Install the latest released binary:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
+chift --help
+```
+
+Update an existing install:
+
+```bash
+chift update
+```
+
+## Local Install From Source
 
 Install the CLI from this checkout when you want to run `chift` directly without `uv run`:
 
