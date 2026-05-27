@@ -10,9 +10,9 @@ from .auth import fetch_token
 from .auth_form import prompt_auth_credentials
 from .client import execute_operation, parse_json_body
 from .config import (
-    ApiKeyCredentials,
     INTERNAL_ENDPOINTS,
     PLATFORM_ENDPOINTS,
+    ApiKeyCredentials,
     endpoint_visible,
     load_api_key_credentials,
     save_api_key_credentials,
@@ -32,7 +32,6 @@ from .schema import (
     tree,
     update_schema,
 )
-
 
 app = typer.Typer(
     no_args_is_help=False,
@@ -67,12 +66,8 @@ def app_callback(
         raise typer.Exit(0)
 
 
-OutputOption = Annotated[
-    OutputFormat, typer.Option("--output", "-o", help="Machine-readable output format.")
-]
-DebugOption = Annotated[
-    bool, typer.Option("--debug", help="Write debug logs to stderr.")
-]
+OutputOption = Annotated[OutputFormat, typer.Option("--output", "-o", help="Machine-readable output format.")]
+DebugOption = Annotated[bool, typer.Option("--debug", help="Write debug logs to stderr.")]
 CHIFT_API_KEYS_URL = "https://chift.app/api-keys"
 ALLOWED_OPERATION_CLASSES = {"all", "dangerous", "read", "write"}
 READ_METHODS = {"get", "head", "options"}
@@ -141,9 +136,7 @@ def group_with_successful_help(*, help: str) -> typer.Typer:
 def operation_allowed_class(operation: Operation) -> str:
     method = operation.method.lower()
     if operation.scopes:
-        any_read_scope = any(
-            scope.split(".")[-1] == "read" for scope in operation.scopes
-        )
+        any_read_scope = any(scope.split(".")[-1] == "read" for scope in operation.scopes)
         if any_read_scope:
             return "read"
         return "dangerous" if method in DANGEROUS_METHODS else "write"
@@ -174,9 +167,7 @@ def _provided_parameters(params: list[str] | None) -> set[str]:
     return {value.split("=", 1)[0] for value in params or [] if "=" in value}
 
 
-def _provided_parameter_names(
-    input_args: list[str] | None, params: list[str] | None
-) -> set[str]:
+def _provided_parameter_names(input_args: list[str] | None, params: list[str] | None) -> set[str]:
     names = _provided_parameters(params)
     for item in input_args or []:
         if "=" in item:
@@ -203,8 +194,7 @@ def _input_values_from_args(
     if len(unnamed) > len(missing_path_names):
         extras = unnamed[len(missing_path_names) :]
         raise ChiftCliError(
-            f"Unexpected positional argument `{extras[0]}`. "
-            "Pass endpoint inputs as KEY=VALUE.",
+            f"Unexpected positional argument `{extras[0]}`. Pass endpoint inputs as KEY=VALUE.",
             details={
                 "extras": extras,
                 "expected_path_parameters": missing_path_names,
@@ -280,9 +270,7 @@ def input_schema(operation: Operation) -> dict[str, Any]:
 
 
 def _input_usage(operation: Operation, schema: dict[str, Any]) -> str:
-    placeholders = (
-        ["<consumer_id>"] if "consumer_id" in schema.get("required", []) else []
-    )
+    placeholders = ["<consumer_id>"] if "consumer_id" in schema.get("required", []) else []
     parts = [
         "chift",
         operation.vertical,
@@ -345,9 +333,7 @@ def exit_with_error(exc: ChiftCliError) -> None:
 def auth_setup(
     account_id: Annotated[
         str | None,
-        typer.Option(
-            "--account-id", envvar="CHIFT_ACCOUNT_ID", help="Chift accountId."
-        ),
+        typer.Option("--account-id", envvar="CHIFT_ACCOUNT_ID", help="Chift accountId."),
     ] = None,
     client_id: Annotated[
         str | None,
@@ -355,9 +341,7 @@ def auth_setup(
     ] = None,
     client_secret: Annotated[
         str | None,
-        typer.Option(
-            "--client-secret", envvar="CHIFT_CLIENT_SECRET", help="Chift clientSecret."
-        ),
+        typer.Option("--client-secret", envvar="CHIFT_CLIENT_SECRET", help="Chift clientSecret."),
     ] = None,
     debug: DebugOption = False,
 ) -> None:
@@ -370,17 +354,13 @@ def auth_setup(
     """
     interactive = not all([account_id, client_id, client_secret])
     if interactive:
-        values = prompt_auth_credentials(
-            account_id=account_id, client_id=client_id, client_secret=client_secret
-        )
+        values = prompt_auth_credentials(account_id=account_id, client_id=client_id, client_secret=client_secret)
         account_id = values.account_id
         client_id = values.client_id
         client_secret = values.client_secret
     if not client_id or not client_secret or not account_id:
         raise ChiftCliError("Client ID, client secret, and account ID are required.")
-    credentials = ApiKeyCredentials(
-        client_id=client_id, client_secret=client_secret, account_id=account_id
-    )
+    credentials = ApiKeyCredentials(client_id=client_id, client_secret=client_secret, account_id=account_id)
     try:
         fetch_token(credentials, debug=debug)
         save_api_key_credentials(credentials)
@@ -448,9 +428,7 @@ def operation_callback(operation: Operation):
     def callback(
         input_args: Annotated[
             list[str] | None,
-            typer.Argument(
-                help="Input values. Use a bare value for consumer_id, or KEY=VALUE."
-            ),
+            typer.Argument(help="Input values. Use a bare value for consumer_id, or KEY=VALUE."),
         ] = None,
         params: Annotated[
             list[str] | None,
@@ -460,9 +438,7 @@ def operation_callback(operation: Operation):
                 help="Parameter as KEY=VALUE. Path params are filled first; the rest become query params.",
             ),
         ] = None,
-        body: Annotated[
-            str | None, typer.Option("--json", help="Raw JSON request body.")
-        ] = None,
+        body: Annotated[str | None, typer.Option("--json", help="Raw JSON request body.")] = None,
         fields: Annotated[
             str | None,
             typer.Option(
@@ -472,23 +448,17 @@ def operation_callback(operation: Operation):
         ] = None,
         filters: Annotated[
             list[str] | None,
-            typer.Option(
-                "--filter", help="Client-side filter as KEY=VALUE; can be repeated."
-            ),
+            typer.Option("--filter", help="Client-side filter as KEY=VALUE; can be repeated."),
         ] = None,
         schema: Annotated[
             bool,
-            typer.Option(
-                "--schema", help="Return this endpoint schema instead of executing it."
-            ),
+            typer.Option("--schema", help="Return this endpoint schema instead of executing it."),
         ] = False,
         next_step: Annotated[
             bool,
             typer.Option("--next", help="Show what inputs this endpoint needs to run."),
         ] = False,
-        force: Annotated[
-            bool, typer.Option("--force", help="Required for mutating operations.")
-        ] = False,
+        force: Annotated[bool, typer.Option("--force", help="Required for mutating operations.")] = False,
         output: OutputOption = "json",
         debug: DebugOption = False,
     ) -> None:
@@ -535,11 +505,7 @@ def operation_callback(operation: Operation):
         provided_inputs = _provided_parameters(merged_params) | set(input_values)
         if isinstance(parsed_body, dict):
             provided_inputs |= set(parsed_body.keys())
-        missing_required = [
-            name
-            for name in merged_schema.get("required", [])
-            if name not in provided_inputs
-        ]
+        missing_required = [name for name in merged_schema.get("required", []) if name not in provided_inputs]
         if missing_required:
             emit_missing_input_guidance(operation, merged_schema)
             raise typer.Exit(2)
@@ -581,14 +547,12 @@ def register_dynamic_commands() -> None:
             vertical_app.add_typer(entity_app, name=entity)
             entity_apps[entity_key] = entity_app
 
-        entity_app.command(
-            operation.command, help=f"{operation.method} {operation.path}"
-        )(operation_callback(operation))
+        entity_app.command(operation.command, help=f"{operation.method} {operation.path}")(
+            operation_callback(operation)
+        )
 
 
-INSTALL_SCRIPT_URL = (
-    "https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh"
-)
+INSTALL_SCRIPT_URL = "https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh"
 
 
 @app.command("update", help="Update chift-cli to the latest version.")

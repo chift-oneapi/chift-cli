@@ -8,7 +8,6 @@ from chift_cli.client import apply_fields, apply_filter, build_request
 from chift_cli.errors import ChiftCliError
 from chift_cli.schema import Operation
 
-
 OPERATION = Operation(
     vertical="consumers",
     entity="consumers",
@@ -186,9 +185,7 @@ def test_positional_key_value_inputs_coerce_like_params(
             },
         },
     )
-    input_values = _input_values_from_args(
-        op, ["c1", "active=true", 'addresses=[{"country":"BE"}]'], None
-    )
+    input_values = _input_values_from_args(op, ["c1", "active=true", 'addresses=[{"country":"BE"}]'], None)
     request = build_request(op, params=None, body=None, input_values=input_values)
     assert request["json"] == {
         "addresses": [{"country": "BE"}],
@@ -227,7 +224,7 @@ def test_build_request_coerces_json_param_values_for_body(monkeypatch: pytest.Mo
         params=[
             "consumer_id=c1",
             "name=Acme",
-            "addresses=[{\"country\":\"BE\"}]",
+            'addresses=[{"country":"BE"}]',
             "active=true",
         ],
         body=None,

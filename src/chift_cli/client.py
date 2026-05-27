@@ -29,9 +29,7 @@ def _coerce_param_value(raw: str) -> Any:
     return raw
 
 
-def parse_key_value(
-    values: list[str] | None, *, coerce: bool = False
-) -> dict[str, Any]:
+def parse_key_value(values: list[str] | None, *, coerce: bool = False) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for value in values or []:
         if "=" not in value:
@@ -44,10 +42,7 @@ def parse_key_value(
 def _coerce_input_values(values: dict[str, Any] | None) -> dict[str, Any]:
     if not values:
         return {}
-    return {
-        key: _coerce_param_value(value) if isinstance(value, str) else value
-        for key, value in values.items()
-    }
+    return {key: _coerce_param_value(value) if isinstance(value, str) else value for key, value in values.items()}
 
 
 def parse_json_body(value: str | None) -> Any:
@@ -60,10 +55,16 @@ def parse_json_body(value: str | None) -> Any:
 
 
 def _query_parameter_names(operation: Operation) -> set[str]:
-    return {parameter["name"] for parameter in operation.raw.get("parameters", []) if parameter.get("in") == "query" and "name" in parameter}
+    return {
+        parameter["name"]
+        for parameter in operation.raw.get("parameters", [])
+        if parameter.get("in") == "query" and "name" in parameter
+    }
 
 
-def build_request(operation: Operation, *, params: list[str] | None, body: str | None, input_values: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_request(
+    operation: Operation, *, params: list[str] | None, body: str | None, input_values: dict[str, Any] | None = None
+) -> dict[str, Any]:
     all_params = parse_key_value(params, coerce=True)
     all_inputs = {**_coerce_input_values(input_values), **all_params}
     query_names = _query_parameter_names(operation)
@@ -78,8 +79,7 @@ def build_request(operation: Operation, *, params: list[str] | None, body: str |
     query = {
         key: value
         for key, value in all_inputs.items()
-        if key in query_names
-        or (key in all_params and not operation.raw.get("requestBody"))
+        if key in query_names or (key in all_params and not operation.raw.get("requestBody"))
     }
     body_inputs = {key: value for key, value in all_inputs.items() if key not in query}
     request_body = parse_json_body(body)
@@ -158,10 +158,7 @@ def _normalize_filter_value(value: Any) -> str:
 def _matches_filters(item: Any, rules: dict[str, str]) -> bool:
     if not isinstance(item, dict):
         return False
-    return all(
-        _normalize_filter_value(_nested_get(item, key)) == expected
-        for key, expected in rules.items()
-    )
+    return all(_normalize_filter_value(_nested_get(item, key)) == expected for key, expected in rules.items())
 
 
 def apply_filter(data: Any, filters: list[str] | None) -> Any:
@@ -210,6 +207,7 @@ def execute_operation(
     if response.status_code == 401:
         # Token may have been invalidated server-side; refresh and retry once.
         from .auth import fetch_token, load_api_key_credentials
+
         credentials = load_api_key_credentials()
         if credentials is None:
             raise AuthenticationError("Chift rejected the access token.", details={"status_code": 401})
@@ -218,9 +216,13 @@ def execute_operation(
     if response.status_code in {401, 403}:
         raise AuthenticationError("Chift rejected the access token.", details={"status_code": response.status_code})
     if response.status_code >= 500:
-        raise RetryRecommendedError("Chift API failed.", details={"status_code": response.status_code, "body": response.text})
+        raise RetryRecommendedError(
+            "Chift API failed.", details={"status_code": response.status_code, "body": response.text}
+        )
     if response.status_code >= 400:
-        raise ChiftCliError("Chift API request failed.", details={"status_code": response.status_code, "body": response.text})
+        raise ChiftCliError(
+            "Chift API request failed.", details={"status_code": response.status_code, "body": response.text}
+        )
     if response.status_code == 204 or not response.content:
         data: Any = None
     else:

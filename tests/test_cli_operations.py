@@ -17,7 +17,6 @@ from chift_cli.cli import (
 )
 from chift_cli.schema import Operation
 
-
 runner = CliRunner()
 
 
@@ -290,12 +289,8 @@ def test_visible_operations_filters_by_allowed_operation_classes(monkeypatch) ->
     monkeypatch.setattr("chift_cli.cli.load_schema", lambda: schema)
 
     operations = visible_operations()
-    accounting_methods = {
-        operation.method for operation in operations if operation.vertical == "accounting"
-    }
-    consumer_methods = {
-        operation.method for operation in operations if operation.vertical == "consumers"
-    }
+    accounting_methods = {operation.method for operation in operations if operation.vertical == "accounting"}
+    consumer_methods = {operation.method for operation in operations if operation.vertical == "consumers"}
 
     assert accounting_methods == {"POST"}
     assert consumer_methods == {"DELETE"}
@@ -309,9 +304,7 @@ def test_read_only_mode_includes_mixed_scope_operations(monkeypatch) -> None:
             "/consumers/{consumer_id}/accounting/suppliers": {
                 "get": {
                     "tags": ["Accounting"],
-                    "security": [
-                        {"oauth2": ["accounting.suppliers", "accounting.suppliers.read"]}
-                    ],
+                    "security": [{"oauth2": ["accounting.suppliers", "accounting.suppliers.read"]}],
                     "parameters": [
                         {
                             "name": "consumer_id",
@@ -457,22 +450,10 @@ def test_operation_allowed_class_classifies_mixed_scopes_as_read() -> None:
 
 
 def test_operation_allowed_class_falls_back_to_http_methods_without_scopes() -> None:
+    assert operation_allowed_class(_operation("accounting", "OPTIONS", "/consumers/{consumer_id}/accounting")) == "read"
+    assert operation_allowed_class(_operation("accounting", "PATCH", "/consumers/{consumer_id}/accounting")) == "write"
     assert (
-        operation_allowed_class(
-            _operation("accounting", "OPTIONS", "/consumers/{consumer_id}/accounting")
-        )
-        == "read"
-    )
-    assert (
-        operation_allowed_class(
-            _operation("accounting", "PATCH", "/consumers/{consumer_id}/accounting")
-        )
-        == "write"
-    )
-    assert (
-        operation_allowed_class(
-            _operation("accounting", "DELETE", "/consumers/{consumer_id}/accounting")
-        )
+        operation_allowed_class(_operation("accounting", "DELETE", "/consumers/{consumer_id}/accounting"))
         == "dangerous"
     )
 
@@ -558,9 +539,7 @@ def test_operation_rejects_extra_positional_arguments() -> None:
 
     assert result.exit_code == 2
     payload = json.loads(result.stderr)
-    assert payload["error"]["message"].startswith(
-        "Unexpected positional argument `stray-extra`."
-    )
+    assert payload["error"]["message"].startswith("Unexpected positional argument `stray-extra`.")
     assert payload["error"]["details"]["extras"] == ["stray-extra", "another-extra"]
 
 
