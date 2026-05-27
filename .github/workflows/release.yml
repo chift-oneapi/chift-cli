@@ -22,17 +22,15 @@ jobs:
   build:
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            target: linux-x86_64
-            expected_arch_pattern: "x86[-_]64"
+            target: linux-amd64
           - os: macos-13
-            target: darwin-x86_64
-            expected_arch_pattern: "x86[-_]64"
-          - os: macos-14-arm64
+            target: darwin-amd64
+          - os: macos-latest
             target: darwin-arm64
-            expected_arch_pattern: "arm64"
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -48,22 +46,29 @@ jobs:
           uv sync --dev
           uv run pyinstaller \
             --onefile \
-            --name chift \
+            --name chift-${{ matrix.target }} \
             --collect-all chift_cli \
             src/chift_cli/__main__.py
 
-      - name: Rename binary
-        run: mv dist/chift dist/chift-${{ matrix.target }}
-
-      - name: Verify binary architecture
+      - name: Package tarball + checksum
+        working-directory: dist
         run: |
-          file dist/chift-${{ matrix.target }}
-          file dist/chift-${{ matrix.target }} | grep -Eq "${{ matrix.expected_arch_pattern }}"
+          BIN="chift-${{ matrix.target }}"
+          TARBALL="${BIN}.tar.gz"
+          chmod +x "$BIN"
+          tar -czf "$TARBALL" "$BIN"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            shasum -a 256 "$TARBALL" > "${TARBALL}.sha256"
+          else
+            sha256sum "$TARBALL" > "${TARBALL}.sha256"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: chift-${{ matrix.target }}
-          path: dist/chift-${{ matrix.target }}
+          path: |
+            dist/chift-${{ matrix.target }}.tar.gz
+            dist/chift-${{ matrix.target }}.tar.gz.sha256
 
   release:
     needs: build
@@ -83,6 +88,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "chift-cli $GITHUB_REF_NAME" \
             --generate-notes \
-            dist/chift-linux-x86_64 \
-            dist/chift-darwin-x86_64 \
-            dist/chift-darwin-arm64
+            dist/*.tar.gz dist/*.tar.gz.sha256
