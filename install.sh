@@ -184,4 +184,6 @@ info "chift CLI installed!"
 printf "\n  %bGet started:%b\n" "$BOLD" "$RESET"
 printf "    chift auth setup     # Configure credentials\n"
 printf "    chift --help         # See all commands\n\n"
-printf "  Restart your shell or 'source %s' to pick up PATH changes.\n\n" "$RC_FILE"
+if [ -n "${RC_FILE:-}" ]; then
+    printf "  Restart your shell or 'source %s' to pick up PATH changes.\n\n" "$RC_FILE"
+fi
