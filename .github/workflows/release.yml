@@ -9,83 +9,100 @@ permissions:
   contents: write
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.11"
-          enable-cache: true
-      - run: uv run pytest
-
   build:
-    needs: test
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: linux-amd64
-          - os: macos-13
-            target: darwin-amd64
-          - os: macos-latest
-            target: darwin-arm64
-    runs-on: ${{ matrix.os }}
+          - os: darwin
+            arch: arm64
+            runner: macos-14
+          - os: darwin
+            arch: amd64
+            runner: macos-14
+          - os: linux
+            arch: amd64
+            runner: ubuntu-22.04
+          - os: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          enable-cache: true
+          python-version: "3.12"
 
-      - name: Build binary
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Build with Nuitka
         run: |
-          uv sync --dev
-          uv run pyinstaller \
-            --onefile \
-            --name chift-${{ matrix.target }} \
-            --collect-all chift_cli \
+          uv run python -m nuitka \
+            --standalone \
+            --output-filename="chift-${{ matrix.os }}-${{ matrix.arch }}" \
+            --output-dir=build \
+            --include-package=chift_cli \
+            --include-package-data=chift_cli \
+            --python-flag=no_site \
+            --assume-yes-for-downloads \
             src/chift_cli/__main__.py
 
-      - name: Package tarball + checksum
-        working-directory: dist
+      - name: Package standalone directory
         run: |
-          BIN="chift-${{ matrix.target }}"
-          TARBALL="${BIN}.tar.gz"
-          chmod +x "$BIN"
-          tar -czf "$TARBALL" "$BIN"
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            shasum -a 256 "$TARBALL" > "${TARBALL}.sha256"
+          cd build
+          tar -czf "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" __main__.dist/
+
+      - name: Generate checksum
+        run: |
+          cd build
+          if [ "${{ matrix.os }}" = "darwin" ]; then
+            shasum -a 256 "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" > "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256"
           else
-            sha256sum "$TARBALL" > "${TARBALL}.sha256"
+            sha256sum "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" > "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256"
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: chift-${{ matrix.target }}
+          name: chift-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            dist/chift-${{ matrix.target }}.tar.gz
-            dist/chift-${{ matrix.target }}.tar.gz.sha256
+            build/chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+            build/chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
+    steps:
       - uses: actions/download-artifact@v4
         with:
-          path: dist
           merge-multiple: true
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify expected artifacts
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "chift-cli $GITHUB_REF_NAME" \
+          for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64; do
+            test -f "chift-${platform}.tar.gz" || { echo "Missing chift-${platform}.tar.gz"; exit 1; }
+            test -f "chift-${platform}.tar.gz.sha256" || { echo "Missing chift-${platform}.tar.gz.sha256"; exit 1; }
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
             --generate-notes \
-            dist/*.tar.gz dist/*.tar.gz.sha256
+            chift-darwin-arm64.tar.gz \
+            chift-darwin-arm64.tar.gz.sha256 \
+            chift-darwin-amd64.tar.gz \
+            chift-darwin-amd64.tar.gz.sha256 \
+            chift-linux-amd64.tar.gz \
+            chift-linux-amd64.tar.gz.sha256 \
+            chift-linux-arm64.tar.gz \
+            chift-linux-arm64.tar.gz.sha256

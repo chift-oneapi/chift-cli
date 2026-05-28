@@ -133,7 +133,7 @@ info "Checksum verified"
 info "Installing to ${LIB_DIR}..."
 rm -rf "$LIB_DIR"
 mkdir -p "$LIB_DIR"
-tar -xzf "${TMPDIR}/${TARBALL}" -C "$LIB_DIR"
+tar -xzf "${TMPDIR}/${TARBALL}" -C "$LIB_DIR" --strip-components=1
 chmod +x "${LIB_DIR}/${BINARY}"
 
 # ── Symlink to bin directory ────────────────────────────────
