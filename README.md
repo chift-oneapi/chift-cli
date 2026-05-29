@@ -43,6 +43,22 @@ Update an existing install (works on all platforms):
 chift update
 ```
 
+## Install From PyPI
+
+Install the published package from [PyPI](https://pypi.org/project/chift-cli/) as an isolated CLI tool. With uv:
+
+```bash
+uv tool install chift-cli
+chift --help
+```
+
+Or with pipx:
+
+```bash
+pipx install chift-cli
+chift --help
+```
+
 ## Local Install From Source
 
 Install the CLI from this checkout when you want to run `chift` directly without `uv run`:
