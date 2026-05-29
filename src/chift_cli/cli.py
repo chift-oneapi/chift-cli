@@ -493,14 +493,8 @@ def operation_callback(operation: Operation):
         merged_params = list(params or [])
         try:
             input_values = _input_values_from_args(operation, input_args, merged_params)
-        except ChiftCliError as exc:
-            exit_with_error(exc)
-        merged_schema = input_schema(operation)
-        try:
+            merged_schema = input_schema(operation)
             validate_input_names(operation, input_args, merged_params, merged_schema)
-        except ChiftCliError as exc:
-            exit_with_error(exc)
-        try:
             parsed_body = parse_json_body(body)
         except ChiftCliError as exc:
             exit_with_error(exc)
