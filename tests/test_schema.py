@@ -2,8 +2,6 @@ import json
 import os
 import time
 
-import httpx
-
 from chift_cli import config
 from chift_cli.schema import (
     find_operation,
@@ -269,20 +267,18 @@ def test_response_is_collection_detects_arrays_and_chift_pages() -> None:
     assert not response_is_collection(single_operation, SAMPLE_SCHEMA)
 
 
-def test_load_schema_fetches_openapi_when_cache_is_missing(monkeypatch, tmp_path) -> None:
+def test_load_schema_fetches_openapi_when_cache_is_missing(monkeypatch, tmp_path, httpx_mock) -> None:
     monkeypatch.setattr(config.settings, "cache_dir", str(tmp_path))
     monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
     monkeypatch.setattr(config.settings, "openapi_path", "/openapi.json")
 
-    def fake_get(url: str, *, timeout: float):
-        assert url == "https://example.test/openapi.json"
-        assert timeout == 30.0
-        return httpx.Response(200, json=SAMPLE_SCHEMA, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr("chift_cli.schema.httpx.get", fake_get)
+    httpx_mock.add_response(url="https://example.test/openapi.json", json=SAMPLE_SCHEMA)
 
     assert load_schema() == SAMPLE_SCHEMA
     assert schema_path().exists()
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.url == "https://example.test/openapi.json"
 
 
 def test_load_schema_refreshes_stale_cache_in_background(monkeypatch, tmp_path) -> None:
