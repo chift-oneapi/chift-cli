@@ -67,7 +67,7 @@ def build_request(
     all_inputs = {**_coerce_input_values(input_values), **all_params}
     query_names = _query_parameter_names(operation)
     path = operation.path
-    for name in path_parameter_names(path):
+    for name in path_parameter_names(operation):
         if name not in all_inputs:
             raise ChiftCliError(
                 f"Missing path parameter `{name}`. Pass it with `--param {name}=...`.",

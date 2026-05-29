@@ -188,7 +188,7 @@ def _input_values_from_args(
             unnamed.append(item)
     if settings.consumer_id and "consumer_id" not in values:
         values["consumer_id"] = settings.consumer_id
-    path_names = path_parameter_names(operation.path)
+    path_names = path_parameter_names(operation)
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
     if len(unnamed) > len(missing_path_names):
