@@ -1,6 +1,5 @@
 import json
 import re
-import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,14 +7,12 @@ from typing import Any
 
 import httpx
 
-from .config import get_openapi_url, schema_path, settings
+from .config import get_openapi_url, schema_path
 from .errors import RetryRecommendedError
 
 HTTP_METHODS = {"delete", "get", "head", "options", "patch", "post", "put"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
 SCOPE_ACTION_PARTS = {"read", "write"}
-_BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()
-_BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
 
 
 @dataclass(frozen=True)
@@ -53,9 +50,7 @@ def slugify(value: str) -> str:
 def load_schema() -> dict[str, Any]:
     path = schema_path()
     if path.exists():
-        data = json.loads(path.read_text())
-        refresh_schema_in_background_if_stale()
-        return data
+        return json.loads(path.read_text())
     _, data = update_schema()
     return data
 
@@ -79,49 +74,6 @@ def update_schema(*, timeout: float = 30.0) -> tuple[Path, dict[str, Any]]:
         ) from exc
     data = response.json()
     return save_schema(data), data
-
-
-def _schema_refresh_interval_seconds() -> int:
-    return max(settings.schema_refresh_interval_seconds, 0)
-
-
-def schema_refresh_is_due(age_seconds: int | None = None) -> bool:
-    age = schema_age_seconds() if age_seconds is None else age_seconds
-    interval = _schema_refresh_interval_seconds()
-    return age is not None and interval > 0 and age >= interval
-
-
-def _background_schema_refresh_worker(timeout: float) -> None:
-    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
-    try:
-        update_schema(timeout=timeout)
-    except Exception:
-        pass
-    finally:
-        with _BACKGROUND_SCHEMA_REFRESH_LOCK:
-            _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
-
-
-def start_background_schema_refresh(*, timeout: float = 30.0) -> bool:
-    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
-    with _BACKGROUND_SCHEMA_REFRESH_LOCK:
-        if _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS:
-            return False
-        _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = True
-    thread = threading.Thread(
-        target=_background_schema_refresh_worker,
-        args=(timeout,),
-        name="chift-schema-refresh",
-        daemon=True,
-    )
-    thread.start()
-    return True
-
-
-def refresh_schema_in_background_if_stale() -> bool:
-    if not schema_refresh_is_due():
-        return False
-    return start_background_schema_refresh()
 
 
 def schema_age_seconds() -> int | None:

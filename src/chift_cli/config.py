@@ -10,7 +10,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
-DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 INTERNAL_ENDPOINTS = {
     "datastores",
     "general",
@@ -41,7 +40,6 @@ class ChiftSettings(BaseSettings):
     show_platform_endpoints: bool = False
     allowed_operations: str | None = None
     consumer_id: str | None = None
-    schema_refresh_interval_seconds: int = DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS
 
 
 settings = ChiftSettings()  # type: ignore[reportCallIssue]

@@ -16,8 +16,7 @@ def pytest_configure(config) -> None:
     #   CHIFT_CACHE_DIR points the schema cache at a copy of the committed
     #       fixture, so building the tree never reaches the live OpenAPI
     #       endpoint over the network. We copy into a temp dir (rather than
-    #       pointing at the repo) so a background refresh can't write into the
-    #       source tree.
+    #       pointing at the repo) to keep the source tree clean.
     #
     # Per-test overrides go through monkeypatch.setattr on config.settings.
     os.environ.setdefault("CHIFT_SHOW_PLATFORM_ENDPOINTS", "1")
@@ -25,8 +24,6 @@ def pytest_configure(config) -> None:
     cache_dir = Path(tempfile.mkdtemp(prefix="chift-cli-test-cache-"))
     shutil.copyfile(FIXTURE_SCHEMA, cache_dir / "openapi.json")
     os.environ.setdefault("CHIFT_CACHE_DIR", str(cache_dir))
-    # Disable the stale-cache background refresh so import never fetches live.
-    os.environ.setdefault("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", "0")
     config._chift_cli_test_cache_dir = cache_dir
 
 
