@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import sys
 from typing import Any, Literal
@@ -24,7 +22,7 @@ def log(message: str, *, debug: bool = False) -> None:
         typer.echo(message, err=True)
 
 
-def emit_error(error: ChiftCliError, output: OutputFormat = "json") -> None:
+def emit_error(error: ChiftCliError) -> None:
     payload: dict[str, Any] = {
         "error": {
             "message": error.message,
@@ -35,7 +33,4 @@ def emit_error(error: ChiftCliError, output: OutputFormat = "json") -> None:
     }
     if "status_code" in error.details:
         payload["error"]["status_code"] = error.details["status_code"]
-    if output == "json":
-        print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
-    else:
-        print(yaml.safe_dump(payload, sort_keys=True), file=sys.stderr)
+    print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)

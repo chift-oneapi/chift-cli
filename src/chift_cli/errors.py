@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 SUCCESS = 0
 ARGUMENT_ERROR = 2
 AUTHENTICATION_ERROR = 3

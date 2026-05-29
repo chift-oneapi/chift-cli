@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from chift_cli import config
@@ -17,7 +15,11 @@ OPERATION = Operation(
     operation_id="consumers_get_consumer",
     summary="Get one consumer",
     scopes=(),
-    raw={},
+    raw={
+        "parameters": [
+            {"name": "consumer_id", "in": "path", "required": True, "schema": {"type": "string"}},
+        ],
+    },
 )
 
 

@@ -1,0 +1,71 @@
+{
+  "components": {
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": { "id": { "type": "string" } }
+      }
+    }
+  },
+  "paths": {
+    "/consumers": {
+      "get": {
+        "tags": ["Consumers"],
+        "summary": "Get consumers",
+        "operationId": "consumers_get_consumers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Consumers"],
+        "summary": "Create new consumer",
+        "operationId": "consumers_create_consumer",
+        "responses": {
+          "200": {
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
+    "/consumers/{consumer_id}": {
+      "get": {
+        "tags": ["Consumers"],
+        "summary": "Get one consumer",
+        "operationId": "consumers_get_consumer",
+        "parameters": [
+          {
+            "name": "consumer_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Consumers"],
+        "summary": "Delete one consumer",
+        "operationId": "consumers_delete_consumer",
+        "parameters": [
+          {
+            "name": "consumer_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ]
+      }
+    }
+  }
+}

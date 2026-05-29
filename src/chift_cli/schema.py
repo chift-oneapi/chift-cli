@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import json
 import re
-import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,14 +7,12 @@ from typing import Any
 
 import httpx
 
-from .config import get_openapi_url, schema_path, settings
+from .config import get_openapi_url, schema_path
 from .errors import RetryRecommendedError
 
 HTTP_METHODS = {"delete", "get", "head", "options", "patch", "post", "put"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
 SCOPE_ACTION_PARTS = {"read", "write"}
-_BACKGROUND_SCHEMA_REFRESH_LOCK = threading.Lock()
-_BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
 
 
 @dataclass(frozen=True)
@@ -55,9 +50,7 @@ def slugify(value: str) -> str:
 def load_schema() -> dict[str, Any]:
     path = schema_path()
     if path.exists():
-        data = json.loads(path.read_text())
-        refresh_schema_in_background_if_stale()
-        return data
+        return json.loads(path.read_text())
     _, data = update_schema()
     return data
 
@@ -81,49 +74,6 @@ def update_schema(*, timeout: float = 30.0) -> tuple[Path, dict[str, Any]]:
         ) from exc
     data = response.json()
     return save_schema(data), data
-
-
-def _schema_refresh_interval_seconds() -> int:
-    return max(settings.schema_refresh_interval_seconds, 0)
-
-
-def schema_refresh_is_due(age_seconds: int | None = None) -> bool:
-    age = schema_age_seconds() if age_seconds is None else age_seconds
-    interval = _schema_refresh_interval_seconds()
-    return age is not None and interval > 0 and age >= interval
-
-
-def _background_schema_refresh_worker(timeout: float) -> None:
-    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
-    try:
-        update_schema(timeout=timeout)
-    except Exception:
-        pass
-    finally:
-        with _BACKGROUND_SCHEMA_REFRESH_LOCK:
-            _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = False
-
-
-def start_background_schema_refresh(*, timeout: float = 30.0) -> bool:
-    global _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS
-    with _BACKGROUND_SCHEMA_REFRESH_LOCK:
-        if _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS:
-            return False
-        _BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS = True
-    thread = threading.Thread(
-        target=_background_schema_refresh_worker,
-        args=(timeout,),
-        name="chift-schema-refresh",
-        daemon=True,
-    )
-    thread.start()
-    return True
-
-
-def refresh_schema_in_background_if_stale() -> bool:
-    if not schema_refresh_is_due():
-        return False
-    return start_background_schema_refresh()
 
 
 def schema_age_seconds() -> int | None:
@@ -166,6 +116,14 @@ def classification_from_tags(
 def classification_from_scopes(
     scopes: tuple[str, ...],
 ) -> OperationClassification | None:
+    """Derive (vertical, entity) from OAuth scopes like `accounting.accounts.read`.
+
+    A scope's first part is the vertical and the middle part(s) the entity; a
+    trailing `read`/`write` action is stripped. When several scopes disagree we
+    pick the entity that appears most often, breaking ties toward the most
+    specific (longest) scope so two- and three-part scopes for the same entity
+    collapse together.
+    """
     candidates: dict[tuple[str, str], tuple[int, int]] = {}
     for scope in scopes:
         parts = scope.split(".")
@@ -198,6 +156,12 @@ def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]
 
 
 def classification_from_path(path: str) -> OperationClassification:
+    """Last-resort classification from the URL path alone.
+
+    `/consumers/{id}/accounting/accounts` is consumer-scoped, so the segment
+    after the consumer id is the real vertical; otherwise the first segment is
+    the vertical and the last is the entity.
+    """
     parts = [slugify(part) for part in path.strip("/").split("/") if part and not part.startswith("{")]
     if not parts:
         return OperationClassification(vertical="root", entity="root")
@@ -209,6 +173,11 @@ def classification_from_path(path: str) -> OperationClassification:
 
 
 def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
+    """Pick a (vertical, entity) for an operation, most-trusted source first.
+
+    Scopes are the most reliable signal, then a pair of tags, then a single tag
+    plus the path, and finally the path alone.
+    """
     return (
         classification_from_scopes(scopes)
         or classification_from_tags(operation)
@@ -230,6 +199,7 @@ def resolve_ref(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, A
 
 
 def resolve_refs_deep(schema: Any, document: dict[str, Any], _seen: frozenset[str] | None = None) -> Any:
+    """Inline every local `$ref` in a schema. `_seen` breaks recursive refs."""
     if not isinstance(schema, dict):
         return schema
     seen = _seen or frozenset()
@@ -263,6 +233,10 @@ def response_schema(operation: dict[str, Any]) -> dict[str, Any]:
 
 
 def response_is_collection(operation: dict[str, Any], document: dict[str, Any]) -> bool:
+    """True if the success response is a bare array or a paginated `ChiftPage`.
+
+    Used to name a read command `list` rather than `get`.
+    """
     schema = resolve_ref(response_schema(operation), document)
     if schema.get("type") == "array":
         return True
@@ -279,6 +253,11 @@ def command_name(
     document: dict[str, Any],
     used: set[str],
 ) -> str:
+    """Name a command from its verb (list/get/create/update/replace/delete).
+
+    `used` tracks names already taken within the same entity; on a collision we
+    fall back to a slugified summary, suffixed `-2`, `-3`, … until unique.
+    """
     if has_read_scope(scopes):
         base = "list" if response_is_collection(operation, document) else "get"
     elif method == "get":

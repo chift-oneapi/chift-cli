@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import subprocess
 
@@ -9,6 +7,7 @@ from typer.testing import CliRunner
 from chift_cli import config
 from chift_cli.cli import (
     INSTALL_SCRIPT_URL,
+    INSTALL_SCRIPT_URL_PS1,
     _display_schema,
     app,
     operation_allowed_class,
@@ -546,10 +545,12 @@ def test_operation_rejects_extra_positional_arguments() -> None:
 def test_update_stops_when_installer_download_fails(monkeypatch) -> None:
     calls: list[tuple[list[str], dict]] = []
 
+    # Force the POSIX update path regardless of the host OS running the test.
+    monkeypatch.setattr("chift_cli.cli.sys.platform", "linux")
+    monkeypatch.setattr("chift_cli.cli.shutil.which", lambda cmd: f"/usr/bin/{cmd}")
+
     def fake_run(args, **kwargs):
         calls.append((args, kwargs))
-        if args == ["curl", "--version"]:
-            return subprocess.CompletedProcess(args, 0)
         if args == ["curl", "-fsSL", INSTALL_SCRIPT_URL]:
             return subprocess.CompletedProcess(args, 22, stdout=b"", stderr=b"404")
         raise AssertionError(f"unexpected subprocess call: {args}")
@@ -561,9 +562,31 @@ def test_update_stops_when_installer_download_fails(monkeypatch) -> None:
     assert result.exit_code == 22
     assert "Update failed." in result.stderr
     assert [call[0] for call in calls] == [
-        ["curl", "--version"],
         ["curl", "-fsSL", INSTALL_SCRIPT_URL],
     ]
+
+
+def test_update_uses_powershell_on_windows(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr("chift_cli.cli.sys.platform", "win32")
+    monkeypatch.setattr(
+        "chift_cli.cli.shutil.which",
+        lambda cmd: r"C:\\pwsh.exe" if cmd == "pwsh" else None,
+    )
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr("chift_cli.cli.subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["update"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0][0] == r"C:\\pwsh.exe"
+    assert calls[0][-1] == f"irm {INSTALL_SCRIPT_URL_PS1} | iex"
 
 
 def test_cursor_limit_and_all_options_are_removed() -> None:

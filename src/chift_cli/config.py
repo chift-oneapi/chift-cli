@@ -1,18 +1,18 @@
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from pydantic import model_validator
+from dotenv import find_dotenv, load_dotenv
+from platformdirs import user_cache_path, user_config_path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv(find_dotenv(usecwd=True))
 
 APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
-DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 INTERNAL_ENDPOINTS = {
     "datastores",
     "general",
@@ -25,21 +25,17 @@ PLATFORM_ENDPOINTS = {"consumers", "integrations", "connections"}
 
 
 class ChiftSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHIFT_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="CHIFT_")
 
     api_base_url: str = DEFAULT_API_BASE_URL
     openapi_path: str = DEFAULT_OPENAPI_PATH
-    openapi_url: str | None = None
 
-    @model_validator(mode="after")
-    def derive_openapi_url(self) -> "ChiftSettings":
-        if self.openapi_url and self.openapi_url.startswith("http"):
-            return self
-        path = self.openapi_url or self.openapi_path
+    @property
+    def openapi_url(self) -> str:
+        path = self.openapi_path
         if not path.startswith("/"):
             path = f"/{path}"
-        self.openapi_url = f"{self.api_base_url.rstrip('/')}{path}"
-        return self
+        return f"{self.api_base_url.rstrip('/')}{path}"
 
     config_dir: str | None = None
     cache_dir: str | None = None
@@ -47,7 +43,6 @@ class ChiftSettings(BaseSettings):
     show_platform_endpoints: bool = False
     allowed_operations: str | None = None
     consumer_id: str | None = None
-    schema_refresh_interval_seconds: int = DEFAULT_SCHEMA_REFRESH_INTERVAL_SECONDS
 
 
 settings = ChiftSettings()  # type: ignore[reportCallIssue]
@@ -70,13 +65,21 @@ class Token:
 
 
 def config_dir() -> Path:
+    # Explicit override and XDG env var take precedence over the per-platform
+    # default; otherwise platformdirs picks the native location for the OS
+    # (~/.config on Linux, ~/Library/Application Support on macOS, %APPDATA% on
+    # Windows).
     root = settings.config_dir or os.environ.get("XDG_CONFIG_HOME")
-    return Path(root, APP_NAME) if root else Path.home() / ".config" / APP_NAME
+    if root:
+        return Path(root, APP_NAME)
+    return user_config_path(APP_NAME, appauthor=False)
 
 
 def cache_dir() -> Path:
     root = settings.cache_dir or os.environ.get("XDG_CACHE_HOME")
-    return Path(root, APP_NAME) if root else Path.home() / ".cache" / APP_NAME
+    if root:
+        return Path(root, APP_NAME)
+    return user_cache_path(APP_NAME, appauthor=False)
 
 
 def config_path() -> Path:

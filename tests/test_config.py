@@ -1,4 +1,4 @@
-from __future__ import annotations
+from pathlib import Path
 
 from chift_cli import config
 
@@ -42,7 +42,6 @@ def test_normal_verticals_are_visible_without_flags(monkeypatch) -> None:
 
 def test_settings_derive_openapi_url_from_default_base(monkeypatch) -> None:
     monkeypatch.delenv("CHIFT_API_BASE_URL", raising=False)
-    monkeypatch.delenv("CHIFT_OPENAPI_URL", raising=False)
     monkeypatch.delenv("CHIFT_OPENAPI_PATH", raising=False)
 
     settings = config.ChiftSettings()
@@ -78,17 +77,52 @@ def test_settings_reads_platform_visibility_from_environment(monkeypatch) -> Non
     assert settings.show_platform_endpoints is True
 
 
-def test_settings_default_schema_refresh_interval_is_one_week(monkeypatch) -> None:
-    monkeypatch.delenv("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", raising=False)
-
-    settings = config.ChiftSettings()
-
-    assert settings.schema_refresh_interval_seconds == 7 * 24 * 60 * 60
+# The per-platform default location is delegated to platformdirs (which has its
+# own test suite). Here we only verify the override precedence we own: an
+# explicit setting beats the XDG env var, which beats the platform default.
 
 
-def test_settings_reads_schema_refresh_interval_from_environment(monkeypatch) -> None:
-    monkeypatch.setenv("CHIFT_SCHEMA_REFRESH_INTERVAL_SECONDS", "3600")
+def test_config_dir_setting_overrides_xdg_and_platform_default(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "config_dir", "/custom/root")
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/home/me/.config")
 
-    settings = config.ChiftSettings()
+    assert config.config_dir() == Path("/custom/root", config.APP_NAME)
 
-    assert settings.schema_refresh_interval_seconds == 3600
+
+def test_config_dir_falls_back_to_xdg_env(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "config_dir", None)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/home/me/.config")
+
+    assert config.config_dir() == Path("/home/me/.config", config.APP_NAME)
+
+
+def test_config_dir_uses_platform_default_without_overrides(monkeypatch) -> None:
+    from platformdirs import user_config_path
+
+    monkeypatch.setattr(config.settings, "config_dir", None)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    assert config.config_dir() == user_config_path(config.APP_NAME, appauthor=False)
+
+
+def test_cache_dir_setting_overrides_xdg_and_platform_default(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "cache_dir", "/custom/cache")
+    monkeypatch.setenv("XDG_CACHE_HOME", "/home/me/.cache")
+
+    assert config.cache_dir() == Path("/custom/cache", config.APP_NAME)
+
+
+def test_cache_dir_falls_back_to_xdg_env(monkeypatch) -> None:
+    monkeypatch.setattr(config.settings, "cache_dir", None)
+    monkeypatch.setenv("XDG_CACHE_HOME", "/home/me/.cache")
+
+    assert config.cache_dir() == Path("/home/me/.cache", config.APP_NAME)
+
+
+def test_cache_dir_uses_platform_default_without_overrides(monkeypatch) -> None:
+    from platformdirs import user_cache_path
+
+    monkeypatch.setattr(config.settings, "cache_dir", None)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+
+    assert config.cache_dir() == user_cache_path(config.APP_NAME, appauthor=False)

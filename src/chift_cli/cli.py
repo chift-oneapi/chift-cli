@@ -1,7 +1,7 @@
-from __future__ import annotations
-
 import json
+import shutil
 import subprocess
+import sys
 from typing import Annotated, Any
 
 import typer
@@ -188,7 +188,7 @@ def _input_values_from_args(
             unnamed.append(item)
     if settings.consumer_id and "consumer_id" not in values:
         values["consumer_id"] = settings.consumer_id
-    path_names = path_parameter_names(operation.path)
+    path_names = path_parameter_names(operation)
     provided = _provided_parameters(params) | set(values)
     missing_path_names = [name for name in path_names if name not in provided]
     if len(unnamed) > len(missing_path_names):
@@ -448,7 +448,9 @@ def operation_callback(operation: Operation):
         ] = None,
         filters: Annotated[
             list[str] | None,
-            typer.Option("--filter", help="Client-side filter as KEY=VALUE; can be repeated."),
+            typer.Option(
+                "--filter", help="Client-side filter as KEY=VALUE; can be repeated. All filters must match (AND)."
+            ),
         ] = None,
         schema: Annotated[
             bool,
@@ -491,14 +493,8 @@ def operation_callback(operation: Operation):
         merged_params = list(params or [])
         try:
             input_values = _input_values_from_args(operation, input_args, merged_params)
-        except ChiftCliError as exc:
-            exit_with_error(exc)
-        merged_schema = input_schema(operation)
-        try:
+            merged_schema = input_schema(operation)
             validate_input_names(operation, input_args, merged_params, merged_schema)
-        except ChiftCliError as exc:
-            exit_with_error(exc)
-        try:
             parsed_body = parse_json_body(body)
         except ChiftCliError as exc:
             exit_with_error(exc)
@@ -553,11 +549,20 @@ def register_dynamic_commands() -> None:
 
 
 INSTALL_SCRIPT_URL = "https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh"
+INSTALL_SCRIPT_URL_PS1 = "https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.ps1"
 
 
 @app.command("update", help="Update chift-cli to the latest version.")
 def update() -> None:
-    if not _curl_available():
+    if sys.platform == "win32":
+        _update_windows()
+    else:
+        _update_posix()
+    typer.secho("chift-cli updated successfully.", fg=typer.colors.GREEN)
+
+
+def _update_posix() -> None:
+    if shutil.which("curl") is None:
         typer.secho(
             "curl is not available. Install it and retry.",
             err=True,
@@ -578,15 +583,37 @@ def update() -> None:
     if result.returncode != 0:
         typer.secho("Update failed.", err=True, fg=typer.colors.RED)
         raise typer.Exit(result.returncode)
-    typer.secho("chift-cli updated successfully.", fg=typer.colors.GREEN)
 
 
-def _curl_available() -> bool:
-    try:
-        subprocess.run(["curl", "--version"], check=True, capture_output=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
+def _update_windows() -> None:
+    powershell = _windows_powershell()
+    if powershell is None:
+        typer.secho(
+            "PowerShell is not available. Install it and retry.",
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+    typer.echo("Updating chift-cli...")
+    # Download the installer and pipe it into PowerShell, mirroring the
+    # documented `irm ... | iex` install flow.
+    command = f"irm {INSTALL_SCRIPT_URL_PS1} | iex"
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        check=False,
+    )
+    if result.returncode != 0:
+        typer.secho("Update failed.", err=True, fg=typer.colors.RED)
+        raise typer.Exit(result.returncode)
+
+
+def _windows_powershell() -> str | None:
+    """Return an available PowerShell executable, preferring pwsh (PS 7+)."""
+    for candidate in ("pwsh", "powershell"):
+        path = shutil.which(candidate)
+        if path is not None:
+            return path
+    return None
 
 
 def main() -> None:

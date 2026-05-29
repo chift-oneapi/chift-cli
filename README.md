@@ -23,17 +23,40 @@ cp .vscode/launch.example.json .vscode/launch.json
 
 ## Install From GitHub Releases
 
-Install the latest released binary:
+Install the latest released binary.
+
+**macOS / Linux:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
-chift --help
 ```
 
-Update an existing install:
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.ps1 | iex
+```
+
+Update an existing install (works on all platforms):
 
 ```bash
 chift update
+```
+
+## Install From PyPI
+
+Install the published package from [PyPI](https://pypi.org/project/chift-cli/) as an isolated CLI tool. With uv:
+
+```bash
+uv tool install chift-cli
+chift --help
+```
+
+Or with pipx:
+
+```bash
+pipx install chift-cli
+chift --help
 ```
 
 ## Local Install From Source
@@ -101,6 +124,11 @@ CHIFT_CLIENT_SECRET=<client_secret> \
 uv run chift auth setup
 ```
 
+The CLI also loads a `.env` file from the current working directory on startup, so
+you can put these (and any other `CHIFT_*` settings) there instead. Copy
+[`.env.example`](.env.example) to `.env` and fill in the values. Real environment
+variables take precedence over `.env`.
+
 Check saved credentials without opening the setup form:
 
 ```bash
@@ -135,8 +163,6 @@ CHIFT_ALLOWED_OPERATIONS=read,write
 CHIFT_SHOW_PLATFORM_ENDPOINTS=1   # exposes consumers, integrations
 CHIFT_SHOW_INTERNAL_ENDPOINTS=1   # exposes general, datastores, syncs, issues, m-c-p, webhooks
 ```
-
-If `CHIFT_OPENAPI_URL` is not set, it is derived from `CHIFT_API_BASE_URL` and defaults to `/openapi.json`.
 
 Set `CHIFT_ALLOWED_OPERATIONS` to a comma-separated list of operation classes when the CLI should only execute those classes for business vertical endpoints. Supported values are `read`, `write`, `dangerous`, and `all`; leaving it unset also allows all operations. Scope metadata takes precedence when it is present: read-only scopes allow `read`, broad scopes allow `write`, and broad `DELETE` operations require `dangerous`. Without scopes, `GET`, `HEAD`, and `OPTIONS` are `read`; `POST` and `PATCH` are `write`; and `DELETE` is `dangerous`. For example, `CHIFT_ALLOWED_OPERATIONS=read,write` rejects `DELETE` commands in verticals like `accounting`, `banking`, and `point-of-sale` before any request is built or sent. Platform and internal endpoint groups keep their full command set.
 

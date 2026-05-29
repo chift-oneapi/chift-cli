@@ -26,18 +26,25 @@ jobs:
           - os: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+          - os: windows
+            arch: amd64
+            runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
 
-    steps:
-      - uses: actions/checkout@v4
+    defaults:
+      run:
+        shell: bash
 
-      - uses: actions/setup-python@v5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.1.0
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -68,7 +75,7 @@ jobs:
             sha256sum "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" > "chift-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chift-${{ matrix.os }}-${{ matrix.arch }}
           path: |
@@ -80,13 +87,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 
       - name: Verify expected artifacts
         run: |
-          for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64; do
+          for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
             test -f "chift-${platform}.tar.gz" || { echo "Missing chift-${platform}.tar.gz"; exit 1; }
             test -f "chift-${platform}.tar.gz.sha256" || { echo "Missing chift-${platform}.tar.gz.sha256"; exit 1; }
           done
@@ -105,4 +112,30 @@ jobs:
             chift-linux-amd64.tar.gz \
             chift-linux-amd64.tar.gz.sha256 \
             chift-linux-arm64.tar.gz \
-            chift-linux-arm64.tar.gz.sha256
+            chift-linux-arm64.tar.gz.sha256 \
+            chift-windows-amd64.tar.gz \
+            chift-windows-amd64.tar.gz.sha256
+
+  publish-pypi:
+    needs: release
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/chift-cli
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish

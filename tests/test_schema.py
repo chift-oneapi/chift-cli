@@ -1,18 +1,9 @@
-from __future__ import annotations
-
-import json
-import os
-import time
-
-import httpx
-
 from chift_cli import config
 from chift_cli.schema import (
     find_operation,
     iter_operations,
     load_schema,
     response_is_collection,
-    save_schema,
     schema_path,
     search_schema,
     tree,
@@ -271,66 +262,15 @@ def test_response_is_collection_detects_arrays_and_chift_pages() -> None:
     assert not response_is_collection(single_operation, SAMPLE_SCHEMA)
 
 
-def test_load_schema_fetches_openapi_when_cache_is_missing(monkeypatch, tmp_path) -> None:
+def test_load_schema_fetches_openapi_when_cache_is_missing(monkeypatch, tmp_path, httpx_mock) -> None:
     monkeypatch.setattr(config.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(config.settings, "openapi_url", "https://example.test/openapi.json")
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    monkeypatch.setattr(config.settings, "openapi_path", "/openapi.json")
 
-    def fake_get(url: str, *, timeout: float):
-        assert url == "https://example.test/openapi.json"
-        assert timeout == 30.0
-        return httpx.Response(200, json=SAMPLE_SCHEMA, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr("chift_cli.schema.httpx.get", fake_get)
+    httpx_mock.add_response(url="https://example.test/openapi.json", json=SAMPLE_SCHEMA)
 
     assert load_schema() == SAMPLE_SCHEMA
     assert schema_path().exists()
-
-
-def test_load_schema_refreshes_stale_cache_in_background(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(config.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(config.settings, "schema_refresh_interval_seconds", 1)
-    monkeypatch.setattr("chift_cli.schema._BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS", False)
-    cached_schema = {"paths": {"/cached": {"get": {"tags": ["Cached"]}}}}
-    refreshed_schema = {"paths": {"/refreshed": {"get": {"tags": ["Refreshed"]}}}}
-    path = save_schema(cached_schema)
-    stale_time = time.time() - 5
-    os.utime(path, (stale_time, stale_time))
-    calls: dict[str, float] = {}
-
-    def fake_update_schema(*, timeout: float = 30.0):
-        calls["timeout"] = timeout
-        return save_schema(refreshed_schema), refreshed_schema
-
-    class ImmediateThread:
-        def __init__(self, *, target, args, name, daemon):
-            self.target = target
-            self.args = args
-            self.name = name
-            self.daemon = daemon
-
-        def start(self):
-            self.target(*self.args)
-
-    monkeypatch.setattr("chift_cli.schema.update_schema", fake_update_schema)
-    monkeypatch.setattr("chift_cli.schema.threading.Thread", ImmediateThread)
-
-    assert load_schema() == cached_schema
-    assert calls == {"timeout": 30.0}
-    assert json.loads(schema_path().read_text()) == refreshed_schema
-
-
-def test_load_schema_does_not_refresh_fresh_cache(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(config.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(config.settings, "schema_refresh_interval_seconds", 60)
-    monkeypatch.setattr("chift_cli.schema._BACKGROUND_SCHEMA_REFRESH_IN_PROGRESS", False)
-    save_schema(SAMPLE_SCHEMA)
-
-    def fail_start_background_schema_refresh():
-        raise AssertionError("fresh schema should not trigger background refresh")
-
-    monkeypatch.setattr(
-        "chift_cli.schema.start_background_schema_refresh",
-        fail_start_background_schema_refresh,
-    )
-
-    assert load_schema() == SAMPLE_SCHEMA
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.url == "https://example.test/openapi.json"
