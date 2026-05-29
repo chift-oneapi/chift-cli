@@ -124,6 +124,11 @@ CHIFT_CLIENT_SECRET=<client_secret> \
 uv run chift auth setup
 ```
 
+The CLI also loads a `.env` file from the current working directory on startup, so
+you can put these (and any other `CHIFT_*` settings) there instead. Copy
+[`.env.example`](.env.example) to `.env` and fill in the values. Real environment
+variables take precedence over `.env`.
+
 Check saved credentials without opening the setup form:
 
 ```bash

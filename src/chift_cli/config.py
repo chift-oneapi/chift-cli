@@ -4,8 +4,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from dotenv import find_dotenv, load_dotenv
 from platformdirs import user_cache_path, user_config_path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv(find_dotenv(usecwd=True))
 
 APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
