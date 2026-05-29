@@ -42,7 +42,6 @@ def test_normal_verticals_are_visible_without_flags(monkeypatch) -> None:
 
 def test_settings_derive_openapi_url_from_default_base(monkeypatch) -> None:
     monkeypatch.delenv("CHIFT_API_BASE_URL", raising=False)
-    monkeypatch.delenv("CHIFT_OPENAPI_URL", raising=False)
     monkeypatch.delenv("CHIFT_OPENAPI_PATH", raising=False)
 
     settings = config.ChiftSettings()

@@ -271,7 +271,8 @@ def test_response_is_collection_detects_arrays_and_chift_pages() -> None:
 
 def test_load_schema_fetches_openapi_when_cache_is_missing(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(config.settings, "openapi_url", "https://example.test/openapi.json")
+    monkeypatch.setattr(config.settings, "api_base_url", "https://example.test")
+    monkeypatch.setattr(config.settings, "openapi_path", "/openapi.json")
 
     def fake_get(url: str, *, timeout: float):
         assert url == "https://example.test/openapi.json"

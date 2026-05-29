@@ -27,17 +27,13 @@ class ChiftSettings(BaseSettings):
 
     api_base_url: str = DEFAULT_API_BASE_URL
     openapi_path: str = DEFAULT_OPENAPI_PATH
-    openapi_url: str | None = None
 
-    @model_validator(mode="after")
-    def derive_openapi_url(self) -> "ChiftSettings":
-        if self.openapi_url and self.openapi_url.startswith("http"):
-            return self
-        path = self.openapi_url or self.openapi_path
+    @property
+    def openapi_url(self) -> str:
+        path = self.openapi_path
         if not path.startswith("/"):
             path = f"/{path}"
-        self.openapi_url = f"{self.api_base_url.rstrip('/')}{path}"
-        return self
+        return f"{self.api_base_url.rstrip('/')}{path}"
 
     config_dir: str | None = None
     cache_dir: str | None = None
