@@ -164,6 +164,14 @@ def classification_from_tags(
 def classification_from_scopes(
     scopes: tuple[str, ...],
 ) -> OperationClassification | None:
+    """Derive (vertical, entity) from OAuth scopes like `accounting.accounts.read`.
+
+    A scope's first part is the vertical and the middle part(s) the entity; a
+    trailing `read`/`write` action is stripped. When several scopes disagree we
+    pick the entity that appears most often, breaking ties toward the most
+    specific (longest) scope so two- and three-part scopes for the same entity
+    collapse together.
+    """
     candidates: dict[tuple[str, str], tuple[int, int]] = {}
     for scope in scopes:
         parts = scope.split(".")
@@ -196,6 +204,12 @@ def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]
 
 
 def classification_from_path(path: str) -> OperationClassification:
+    """Last-resort classification from the URL path alone.
+
+    `/consumers/{id}/accounting/accounts` is consumer-scoped, so the segment
+    after the consumer id is the real vertical; otherwise the first segment is
+    the vertical and the last is the entity.
+    """
     parts = [slugify(part) for part in path.strip("/").split("/") if part and not part.startswith("{")]
     if not parts:
         return OperationClassification(vertical="root", entity="root")
@@ -207,6 +221,11 @@ def classification_from_path(path: str) -> OperationClassification:
 
 
 def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
+    """Pick a (vertical, entity) for an operation, most-trusted source first.
+
+    Scopes are the most reliable signal, then a pair of tags, then a single tag
+    plus the path, and finally the path alone.
+    """
     return (
         classification_from_scopes(scopes)
         or classification_from_tags(operation)
@@ -228,6 +247,7 @@ def resolve_ref(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, A
 
 
 def resolve_refs_deep(schema: Any, document: dict[str, Any], _seen: frozenset[str] | None = None) -> Any:
+    """Inline every local `$ref` in a schema. `_seen` breaks recursive refs."""
     if not isinstance(schema, dict):
         return schema
     seen = _seen or frozenset()
@@ -261,6 +281,10 @@ def response_schema(operation: dict[str, Any]) -> dict[str, Any]:
 
 
 def response_is_collection(operation: dict[str, Any], document: dict[str, Any]) -> bool:
+    """True if the success response is a bare array or a paginated `ChiftPage`.
+
+    Used to name a read command `list` rather than `get`.
+    """
     schema = resolve_ref(response_schema(operation), document)
     if schema.get("type") == "array":
         return True
@@ -277,6 +301,11 @@ def command_name(
     document: dict[str, Any],
     used: set[str],
 ) -> str:
+    """Name a command from its verb (list/get/create/update/replace/delete).
+
+    `used` tracks names already taken within the same entity; on a collision we
+    fall back to a slugified summary, suffixed `-2`, `-3`, … until unique.
+    """
     if has_read_scope(scopes):
         base = "list" if response_is_collection(operation, document) else "get"
     elif method == "get":
