@@ -26,8 +26,15 @@ jobs:
           - os: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+          - os: windows
+            arch: amd64
+            runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +93,7 @@ jobs:
 
       - name: Verify expected artifacts
         run: |
-          for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64; do
+          for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
             test -f "chift-${platform}.tar.gz" || { echo "Missing chift-${platform}.tar.gz"; exit 1; }
             test -f "chift-${platform}.tar.gz.sha256" || { echo "Missing chift-${platform}.tar.gz.sha256"; exit 1; }
           done
@@ -105,4 +112,6 @@ jobs:
             chift-linux-amd64.tar.gz \
             chift-linux-amd64.tar.gz.sha256 \
             chift-linux-arm64.tar.gz \
-            chift-linux-arm64.tar.gz.sha256
+            chift-linux-arm64.tar.gz.sha256 \
+            chift-windows-amd64.tar.gz \
+            chift-windows-amd64.tar.gz.sha256

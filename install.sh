@@ -29,7 +29,7 @@ need() { command -v "$1" >/dev/null 2>&1 || return 1; }
 
 # ── Parse flags ──────────────────────────────────────────────
 
-MODIFY_PATH=1
+MODIFY_PATH=0
 for arg in "$@"; do
     case "$arg" in
         --help|-h)
@@ -42,7 +42,8 @@ Usage:
     curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
 
 Options:
-    --no-modify-path    Don't add the install directory to shell rc files
+    --modify-path       Add the install directory to your shell rc file.
+                        By default the installer only prints the command to run.
 
 Environment variables:
     CHIFT_VERSION       Pin a release tag (e.g. v0.1.0). Default: latest
@@ -55,7 +56,7 @@ After install:
 EOF
             exit 0
             ;;
-        --no-modify-path) MODIFY_PATH=0 ;;
+        --modify-path) MODIFY_PATH=1 ;;
     esac
 done
 
@@ -144,46 +145,55 @@ info "Linked ${BIN_DIR}/chift -> ${LIB_DIR}/${BINARY}"
 
 # ── PATH configuration ─────────────────────────────────────
 
-PATH_LINE="export PATH=\"${BIN_DIR}:\$PATH\""
-
-case ":${PATH}:" in
-    *":${BIN_DIR}:"*)
-        ;;
-    *)
-        if [ "$MODIFY_PATH" -eq 1 ]; then
-            SHELL_NAME="$(basename "${SHELL:-/bin/sh}")"
-            case "$SHELL_NAME" in
-                zsh)  RC_FILE="$HOME/.zshrc" ;;
-                bash) [ -f "$HOME/.bashrc" ] && RC_FILE="$HOME/.bashrc" || RC_FILE="$HOME/.bash_profile" ;;
-                fish) RC_FILE="$HOME/.config/fish/config.fish" ;;
-                *)    RC_FILE="$HOME/.profile" ;;
-            esac
-
-            if [ -f "$RC_FILE" ] && grep -qF "$BIN_DIR" "$RC_FILE" 2>/dev/null; then
-                :
-            else
-                mkdir -p "$(dirname "$RC_FILE")"
-                if [ "$SHELL_NAME" = "fish" ]; then
-                    printf '\n# Added by chift CLI installer\nfish_add_path "%s"\n' "$BIN_DIR" >> "$RC_FILE"
-                else
-                    printf '\n# Added by chift CLI installer\n%s\n' "$PATH_LINE" >> "$RC_FILE"
-                fi
-                info "Added ${BIN_DIR} to PATH in ${RC_FILE}"
-            fi
-            export PATH="${BIN_DIR}:$PATH"
-        else
-            printf "\n  %bAdd %s to your PATH:%b\n    %s\n\n" "$BOLD" "$BIN_DIR" "$RESET" "$PATH_LINE"
-        fi
-        ;;
+SHELL_NAME="$(basename "${SHELL:-/bin/sh}")"
+case "$SHELL_NAME" in
+    zsh)  RC_FILE="$HOME/.zshrc" ;;
+    bash) [ -f "$HOME/.bashrc" ] && RC_FILE="$HOME/.bashrc" || RC_FILE="$HOME/.bash_profile" ;;
+    fish) RC_FILE="$HOME/.config/fish/config.fish" ;;
+    *)    RC_FILE="$HOME/.profile" ;;
 esac
+
+if [ "$SHELL_NAME" = "fish" ]; then
+    PATH_LINE="fish_add_path \"${BIN_DIR}\""
+else
+    PATH_LINE="export PATH=\"${BIN_DIR}:\$PATH\""
+fi
+# Command the user can run to persist PATH across sessions.
+PATH_CMD="echo '${PATH_LINE}' >> \"${RC_FILE}\""
+
+NEEDS_PATH=0
+case ":${PATH}:" in
+    *":${BIN_DIR}:"*) ;;
+    *) NEEDS_PATH=1 ;;
+esac
+
+if [ "$NEEDS_PATH" -eq 1 ] && [ "$MODIFY_PATH" -eq 1 ]; then
+    if [ -f "$RC_FILE" ] && grep -qF "$BIN_DIR" "$RC_FILE" 2>/dev/null; then
+        :
+    else
+        mkdir -p "$(dirname "$RC_FILE")"
+        printf '\n# Added by chift CLI installer\n%s\n' "$PATH_LINE" >> "$RC_FILE"
+        info "Added ${BIN_DIR} to PATH in ${RC_FILE}"
+    fi
+    export PATH="${BIN_DIR}:$PATH"
+    NEEDS_PATH=0
+    MODIFIED_PATH=1
+fi
 
 # ── Success ─────────────────────────────────────────────────
 
 printf "\n"
 info "chift CLI installed!"
+
+if [ "$NEEDS_PATH" -eq 1 ]; then
+    printf "\n  %b%s is not on your PATH. Add it permanently by running:%b\n" "$BOLD" "$BIN_DIR" "$RESET"
+    printf "    %s\n" "$PATH_CMD"
+    printf "\n  Then restart your shell or 'source %s'.\n" "$RC_FILE"
+fi
+
 printf "\n  %bGet started:%b\n" "$BOLD" "$RESET"
 printf "    chift auth setup     # Configure credentials\n"
 printf "    chift --help         # See all commands\n\n"
-if [ -n "${RC_FILE:-}" ]; then
+if [ "${MODIFIED_PATH:-0}" -eq 1 ]; then
     printf "  Restart your shell or 'source %s' to pick up PATH changes.\n\n" "$RC_FILE"
 fi

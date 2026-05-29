@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from pydantic import model_validator
+from platformdirs import user_cache_path, user_config_path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "chift-cli"
@@ -70,13 +70,21 @@ class Token:
 
 
 def config_dir() -> Path:
+    # Explicit override and XDG env var take precedence over the per-platform
+    # default; otherwise platformdirs picks the native location for the OS
+    # (~/.config on Linux, ~/Library/Application Support on macOS, %APPDATA% on
+    # Windows).
     root = settings.config_dir or os.environ.get("XDG_CONFIG_HOME")
-    return Path(root, APP_NAME) if root else Path.home() / ".config" / APP_NAME
+    if root:
+        return Path(root, APP_NAME)
+    return user_config_path(APP_NAME, appauthor=False)
 
 
 def cache_dir() -> Path:
     root = settings.cache_dir or os.environ.get("XDG_CACHE_HOME")
-    return Path(root, APP_NAME) if root else Path.home() / ".cache" / APP_NAME
+    if root:
+        return Path(root, APP_NAME)
+    return user_cache_path(APP_NAME, appauthor=False)
 
 
 def config_path() -> Path:

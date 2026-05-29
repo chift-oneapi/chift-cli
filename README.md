@@ -23,14 +23,21 @@ cp .vscode/launch.example.json .vscode/launch.json
 
 ## Install From GitHub Releases
 
-Install the latest released binary:
+Install the latest released binary.
+
+**macOS / Linux:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
-chift --help
 ```
 
-Update an existing install:
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.ps1 | iex
+```
+
+Update an existing install (works on all platforms):
 
 ```bash
 chift update
