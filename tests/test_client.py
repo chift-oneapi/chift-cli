@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from chift_cli import config
