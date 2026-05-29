@@ -82,6 +82,7 @@ def fetch_token(credentials: ApiKeyCredentials, *, timeout: float = 20.0, debug:
             _auth_error_message(response),
             details={"status_code": response.status_code, "body": response.text},
         )
+    response.raise_for_status()
     data: dict[str, Any] = response.json()
     token = Token(
         access_token=data["access_token"],
