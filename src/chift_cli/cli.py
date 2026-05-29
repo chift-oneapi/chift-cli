@@ -448,7 +448,9 @@ def operation_callback(operation: Operation):
         ] = None,
         filters: Annotated[
             list[str] | None,
-            typer.Option("--filter", help="Client-side filter as KEY=VALUE; can be repeated."),
+            typer.Option(
+                "--filter", help="Client-side filter as KEY=VALUE; can be repeated. All filters must match (AND)."
+            ),
         ] = None,
         schema: Annotated[
             bool,
