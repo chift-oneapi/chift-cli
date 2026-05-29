@@ -23,7 +23,7 @@ PLATFORM_ENDPOINTS = {"consumers", "integrations", "connections"}
 
 
 class ChiftSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHIFT_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="CHIFT_")
 
     api_base_url: str = DEFAULT_API_BASE_URL
     openapi_path: str = DEFAULT_OPENAPI_PATH
