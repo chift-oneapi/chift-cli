@@ -107,6 +107,14 @@ Check saved credentials without opening the setup form:
 uv run chift auth check
 ```
 
+## Install The Agent Skill
+
+This repo ships an agent skill (`skills/chift-cli/`) that teaches coding agents how to drive the CLI. Install it into your agent with the [`skills`](https://www.skills.sh/docs) CLI:
+
+```bash
+npx skills add chift-oneapi/chift-cli
+```
+
 ## Environment
 
 Environment variables are loaded once at process startup through `pydantic-settings`. Place them in a `.env` file in your working directory or export them in your shell. See `.env.example` for a template.
