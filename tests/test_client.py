@@ -1,8 +1,9 @@
+import httpx
 import pytest
 
 from chift_cli import config
 from chift_cli.cli import _input_values_from_args
-from chift_cli.client import apply_fields, apply_filter, build_request
+from chift_cli.client import _do_request, apply_fields, apply_filter, build_request
 from chift_cli.errors import ChiftCliError
 from chift_cli.schema import Operation
 
@@ -34,6 +35,24 @@ def test_build_request_requires_path_params() -> None:
     with pytest.raises(ChiftCliError) as exc_info:
         build_request(OPERATION, params=None, body=None)
     assert exc_info.value.message == "Missing path parameter `consumer_id`. Pass it with `--param consumer_id=...`."
+
+
+def test_do_request_adds_datalayer_header_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_headers = {}
+    monkeypatch.setattr(config.settings, "use_datalayer", True)
+
+    def fake_request(*args, **kwargs):
+        captured_headers.update(kwargs["headers"])
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr("chift_cli.client.httpx.request", fake_request)
+
+    _do_request({"method": "GET", "url": "https://example.test/accounting", "params": {}, "json": None}, "token")
+
+    assert captured_headers == {
+        "Authorization": "Bearer token",
+        "x-chift-datalayer": "true",
+    }
 
 
 def test_apply_fields_supports_nested_fields() -> None:
