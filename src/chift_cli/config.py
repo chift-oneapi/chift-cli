@@ -43,6 +43,7 @@ class ChiftSettings(BaseSettings):
     show_platform_endpoints: bool = False
     allowed_operations: str | None = None
     consumer_id: str | None = None
+    use_datalayer: bool = False
 
 
 settings = ChiftSettings()  # type: ignore[reportCallIssue]

@@ -77,6 +77,14 @@ def test_settings_reads_platform_visibility_from_environment(monkeypatch) -> Non
     assert settings.show_platform_endpoints is True
 
 
+def test_settings_reads_datalayer_flag_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CHIFT_USE_DATALAYER", "1")
+
+    settings = config.ChiftSettings()
+
+    assert settings.use_datalayer is True
+
+
 # The per-platform default location is delegated to platformdirs (which has its
 # own test suite). Here we only verify the override precedence we own: an
 # explicit setting beats the XDG env var, which beats the platform default.

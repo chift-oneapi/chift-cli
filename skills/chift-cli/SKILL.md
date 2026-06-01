@@ -102,6 +102,12 @@ export CHIFT_CONSUMER_ID=<consumer_id>
 chift accounting folders list
 ```
 
+If the user need it's requests to go through the datalayer, set `CHIFT_USE_DATALAYER=1`. This routes the requests to the Chift API through the datalayer for faster queries:
+
+```bash
+CHIFT_USE_DATALAYER=1 chift accounting folders list <consumer_id>
+```
+
 Pass all other endpoint inputs as normal `KEY=VALUE` arguments:
 
 ```bash

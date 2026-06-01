@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 
 from .auth import get_access_token
-from .config import get_api_base_url
+from .config import get_api_base_url, settings
 from .errors import AuthenticationError, ChiftCliError, RetryRecommendedError
 from .output import log
 from .pathing import path_parameter_names
@@ -173,6 +173,8 @@ def apply_filter(data: Any, filters: list[str] | None) -> Any:
 
 def _do_request(request: dict[str, Any], token: str, *, debug: bool = False) -> httpx.Response:
     headers = {"Authorization": f"Bearer {token}"}
+    if settings.use_datalayer:
+        headers["x-chift-datalayer"] = "true"
     log(f"{request['method']} {request['url']} params={request['params']}", debug=debug)
     try:
         response = httpx.request(
