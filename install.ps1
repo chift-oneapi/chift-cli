@@ -141,7 +141,7 @@ Write-Info "chift CLI installed!"
 if (-not $OnPath) {
     Write-Host ""
     Write-Host "  $LibDir is not on your PATH. Add it permanently by running:" -ForegroundColor White
-    Write-Host "    setx Path `"`$env:Path;$LibDir`""
+    Write-Host "    [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';$LibDir', 'User')"
     Write-Host ""
     Write-Host "  Then open a new terminal to pick up the change." -ForegroundColor White
 }
