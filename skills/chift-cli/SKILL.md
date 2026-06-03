@@ -14,7 +14,7 @@ chift ...
 If `chift` is not installed, install the latest released binary:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
+curl -fsSL https://chift.eu/cli/install.sh | sh
 ```
 
 ## Authentication

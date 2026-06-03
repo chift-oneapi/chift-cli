@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Usage:
-        irm https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.ps1 | iex
+        irm https://chift.eu/cli/install.ps1 | iex
 
     Environment variables:
         CHIFT_VERSION      Pin to a specific release tag (e.g. v0.1.0). Default: latest
