@@ -28,13 +28,13 @@ Install the latest released binary.
 **macOS / Linux:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
+curl -fsSL https://chift.eu/cli/install.sh | sh
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.ps1 | iex
+irm https://chift.eu/cli/install.ps1 | iex
 ```
 
 Update an existing install (works on all platforms):

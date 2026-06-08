@@ -1,6 +1,6 @@
 #!/bin/sh
 # chift CLI installer — downloads pre-built binaries from GitHub Releases
-# Usage: curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
+# Usage: curl -fsSL https://chift.eu/cli/install.sh | sh
 #
 # Environment variables:
 #   CHIFT_VERSION      - Pin to a specific release tag (default: latest)
@@ -39,7 +39,7 @@ chift CLI installer
 Downloads a pre-built binary from GitHub Releases and installs it.
 
 Usage:
-    curl -fsSL https://raw.githubusercontent.com/chift-oneapi/chift-cli/master/install.sh | sh
+    curl -fsSL https://chift.eu/cli/install.sh | sh
 
 Options:
     --modify-path       Add the install directory to your shell rc file.
