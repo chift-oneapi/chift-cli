@@ -385,6 +385,17 @@ def test_operation_allowed_class_uses_read_scopes_before_method() -> None:
     assert operation_allowed_class(operation) == "read"
 
 
+def test_operation_allowed_class_recognises_short_read_scopes() -> None:
+    operation = _operation(
+        "accounting",
+        "GET",
+        "/consumers/{consumer_id}/accounting/reports",
+        scopes=("200", "200.r", "200.reports", "200.reports.r"),
+    )
+
+    assert operation_allowed_class(operation) == "read"
+
+
 def test_operation_allowed_class_uses_broad_scopes_before_method() -> None:
     operation = _operation(
         "accounting",

@@ -24,6 +24,7 @@ from .pathing import path_parameter_names
 from .schema import (
     DESTRUCTIVE_METHODS,
     Operation,
+    has_read_scope,
     iter_operations,
     load_schema,
     resolve_refs_deep,
@@ -136,8 +137,7 @@ def group_with_successful_help(*, help: str) -> typer.Typer:
 def operation_allowed_class(operation: Operation) -> str:
     method = operation.method.lower()
     if operation.scopes:
-        any_read_scope = any(scope.split(".")[-1] == "read" for scope in operation.scopes)
-        if any_read_scope:
+        if has_read_scope(operation.scopes):
             return "read"
         return "dangerous" if method in DANGEROUS_METHODS else "write"
     if method in READ_METHODS:
