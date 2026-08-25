@@ -45,11 +45,6 @@ class ScopeParts:
 
 _VERTICAL_ALIASES: dict[str, str] = {
     "pos": "point-of-sale",
-}
-
-# Verticals whose display name slugifies to something other than the name the URL
-# and the scopes use. Two spellings would split one vertical's commands in two.
-_TAG_VERTICAL_ALIASES: dict[str, str] = {
     "e-commerce": "commerce",
     "property-management-system": "pms",
 }
@@ -58,8 +53,7 @@ _TAG_VERTICAL_ALIASES: dict[str, str] = {
 def slugify(value: str) -> str:
     value = value.replace("_", "-")
     value = re.sub(r"(?<!^)(?=[A-Z])", "-", value).lower()
-    value = re.sub(r"[^a-z0-9-]+", "-", value)
-    return _VERTICAL_ALIASES.get(value, value)
+    return re.sub(r"[^a-z0-9-]+", "-", value)
 
 
 def load_schema() -> dict[str, Any]:
@@ -123,15 +117,16 @@ def has_read_scope(scopes: tuple[str, ...]) -> bool:
     return any(scope.split(".")[-1] in SCOPE_READ_ACTIONS for scope in scopes)
 
 
-def vertical_from_tag(tag: str) -> str:
-    """Name a vertical from an OpenAPI tag.
+def canonical_vertical(value: str) -> str:
+    """Reduce any spelling of a vertical to the one name its commands live under.
 
-    Tags are display prose, so slugifying one can spell a vertical differently
-    from the URL and the scopes. Two spellings would split one vertical's
-    commands across two groups in the help output.
+    A vertical is named three different ways: the scope prefix and the URL agree
+    on a short form (`pms`), while the tag is display prose that slugifies to
+    something longer. Any two of them left unreconciled would split one
+    vertical's commands across two groups in the help output.
     """
-    slug = re.sub(r"-{2,}", "-", slugify(tag)).strip("-")
-    return _TAG_VERTICAL_ALIASES.get(slug, slug)
+    slug = re.sub(r"-{2,}", "-", value).strip("-")
+    return _VERTICAL_ALIASES.get(slug, slug)
 
 
 def classification_from_tags(
@@ -140,14 +135,14 @@ def classification_from_tags(
     tags = [slugify(tag) for tag in operation.get("tags") or [] if isinstance(tag, str) and tag.strip()]
     if len(tags) < 2:
         return None
-    return OperationClassification(vertical=vertical_from_tag(tags[0]), entity=tags[1])
+    return OperationClassification(vertical=canonical_vertical(tags[0]), entity=tags[1])
 
 
 def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]) -> OperationClassification | None:
     tags = [slugify(tag) for tag in operation.get("tags") or [] if isinstance(tag, str) and tag.strip()]
     if len(tags) != 1:
         return None
-    return OperationClassification(vertical=vertical_from_tag(tags[0]), entity=entity_from_path(path))
+    return OperationClassification(vertical=canonical_vertical(tags[0]), entity=entity_from_path(path))
 
 
 def classification_from_path(path: str) -> OperationClassification:
@@ -161,10 +156,10 @@ def classification_from_path(path: str) -> OperationClassification:
     if not parts:
         return OperationClassification(vertical="root", entity="root")
     if len(parts) == 1:
-        return OperationClassification(vertical=parts[0], entity=parts[0])
+        return OperationClassification(vertical=canonical_vertical(parts[0]), entity=parts[0])
     if parts[0] == "consumers" and len(parts) >= 3:
-        return OperationClassification(vertical=parts[1], entity=parts[-1])
-    return OperationClassification(vertical=parts[0], entity=parts[-1])
+        return OperationClassification(vertical=canonical_vertical(parts[1]), entity=parts[-1])
+    return OperationClassification(vertical=canonical_vertical(parts[0]), entity=parts[-1])
 
 
 def split_scope(scope: str) -> ScopeParts | None:
@@ -208,7 +203,7 @@ def classification_from_scopes(path: str, scopes: tuple[str, ...]) -> OperationC
         count, depth = entities.get(parts.entity, (0, 0))
         entities[parts.entity] = (count + 1, max(depth, parts.depth))
     return OperationClassification(
-        vertical=slugify(chosen[0].prefix) if named else classification_from_path(path).vertical,
+        vertical=canonical_vertical(slugify(chosen[0].prefix)) if named else classification_from_path(path).vertical,
         entity=min(entities, key=lambda name: (-entities[name][0], -entities[name][1], name)),
     )
 
