@@ -43,10 +43,13 @@ class ScopeParts:
     depth: int
 
 
+# The URL and the scopes clip a vertical's name; the tag spells it out. Commands are
+# named after the spelled-out form, so the clipped spellings map onto it, never the
+# reverse.
 _VERTICAL_ALIASES: dict[str, str] = {
     "pos": "point-of-sale",
-    "e-commerce": "commerce",
-    "property-management-system": "pms",
+    "pms": "property-management-system",
+    "commerce": "e-commerce",
 }
 
 

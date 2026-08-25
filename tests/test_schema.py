@@ -345,10 +345,10 @@ def test_operation_classification_ignores_api_code_scopes() -> None:
         ("accounting", "invoices", "list"),
         ("point-of-sale", "orders", "create"),
         ("point-of-sale", "orders", "list"),
-        ("commerce", "products", "create"),
-        ("commerce", "products", "list"),
-        ("pms", "invoices", "create"),
-        ("pms", "invoices", "list"),
+        ("e-commerce", "products", "create"),
+        ("e-commerce", "products", "list"),
+        ("property-management-system", "invoices", "create"),
+        ("property-management-system", "invoices", "list"),
     }
 
 
@@ -368,7 +368,7 @@ def test_operation_classification_gives_up_rather_than_spell_a_vertical_two_ways
 
     verticals = {operation.vertical for operation in iter_operations(schema)}
 
-    assert verticals == {"accounting", "point-of-sale", "commerce", "pms"}
+    assert verticals == {"accounting", "point-of-sale", "e-commerce", "property-management-system"}
 
 
 def test_operation_classification_measures_entity_depth_without_the_action() -> None:
