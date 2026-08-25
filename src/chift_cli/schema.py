@@ -12,7 +12,8 @@ from .errors import RetryRecommendedError
 
 HTTP_METHODS = {"delete", "get", "head", "options", "patch", "post", "put"}
 DESTRUCTIVE_METHODS = {"delete", "patch", "post", "put"}
-SCOPE_ACTION_PARTS = {"read", "write"}
+SCOPE_READ_ACTIONS = {"r", "read"}
+SCOPE_ACTION_PARTS = SCOPE_READ_ACTIONS | {"w", "write"}
 
 
 @dataclass(frozen=True)
@@ -35,8 +36,22 @@ class OperationClassification:
     entity: str
 
 
+@dataclass(frozen=True)
+class ScopeParts:
+    prefix: str
+    entity: str
+    depth: int
+
+
 _VERTICAL_ALIASES: dict[str, str] = {
     "pos": "point-of-sale",
+}
+
+# Verticals whose display name slugifies to something other than the name the URL
+# and the scopes use. Two spellings would split one vertical's commands in two.
+_TAG_VERTICAL_ALIASES: dict[str, str] = {
+    "e-commerce": "commerce",
+    "property-management-system": "pms",
 }
 
 
@@ -100,8 +115,23 @@ def extract_scopes(operation: dict[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(scopes))
 
 
+def is_oneapi_code(part: str) -> bool:
+    return part.isdigit()
+
+
 def has_read_scope(scopes: tuple[str, ...]) -> bool:
-    return any(scope.split(".")[-1] == "read" for scope in scopes)
+    return any(scope.split(".")[-1] in SCOPE_READ_ACTIONS for scope in scopes)
+
+
+def vertical_from_tag(tag: str) -> str:
+    """Name a vertical from an OpenAPI tag.
+
+    Tags are display prose, so slugifying one can spell a vertical differently
+    from the URL and the scopes. Two spellings would split one vertical's
+    commands across two groups in the help output.
+    """
+    slug = re.sub(r"-{2,}", "-", slugify(tag)).strip("-")
+    return _TAG_VERTICAL_ALIASES.get(slug, slug)
 
 
 def classification_from_tags(
@@ -110,49 +140,14 @@ def classification_from_tags(
     tags = [slugify(tag) for tag in operation.get("tags") or [] if isinstance(tag, str) and tag.strip()]
     if len(tags) < 2:
         return None
-    return OperationClassification(vertical=tags[0], entity=tags[1])
-
-
-def classification_from_scopes(
-    scopes: tuple[str, ...],
-) -> OperationClassification | None:
-    """Derive (vertical, entity) from OAuth scopes like `accounting.accounts.read`.
-
-    A scope's first part is the vertical and the middle part(s) the entity; a
-    trailing `read`/`write` action is stripped. When several scopes disagree we
-    pick the entity that appears most often, breaking ties toward the most
-    specific (longest) scope so two- and three-part scopes for the same entity
-    collapse together.
-    """
-    candidates: dict[tuple[str, str], tuple[int, int]] = {}
-    for scope in scopes:
-        parts = scope.split(".")
-        if len(parts) < 2 or not parts[0]:
-            continue
-        if parts[-1] in SCOPE_ACTION_PARTS:
-            entity_parts = parts[1:-1]
-        else:
-            entity_parts = parts[1:]
-        if not entity_parts or not any(entity_parts):
-            continue
-        vertical = slugify(parts[0])
-        entity = slugify(".".join(entity_parts))
-        count, specificity = candidates.get((vertical, entity), (0, 0))
-        candidates[(vertical, entity)] = (count + 1, max(specificity, len(parts)))
-    if not candidates:
-        return None
-    (vertical, entity), _ = sorted(
-        candidates.items(),
-        key=lambda item: (-item[1][0], -item[1][1], item[0][0], item[0][1]),
-    )[0]
-    return OperationClassification(vertical=vertical, entity=entity)
+    return OperationClassification(vertical=vertical_from_tag(tags[0]), entity=tags[1])
 
 
 def classification_from_single_tag_and_path(path: str, operation: dict[str, Any]) -> OperationClassification | None:
     tags = [slugify(tag) for tag in operation.get("tags") or [] if isinstance(tag, str) and tag.strip()]
     if len(tags) != 1:
         return None
-    return OperationClassification(vertical=tags[0], entity=entity_from_path(path))
+    return OperationClassification(vertical=vertical_from_tag(tags[0]), entity=entity_from_path(path))
 
 
 def classification_from_path(path: str) -> OperationClassification:
@@ -172,14 +167,56 @@ def classification_from_path(path: str) -> OperationClassification:
     return OperationClassification(vertical=parts[0], entity=parts[-1])
 
 
-def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
-    """Pick a (vertical, entity) for an operation, most-trusted source first.
+def split_scope(scope: str) -> ScopeParts | None:
+    """Split a scope into the prefix naming its vertical and the entity it grants.
 
-    Scopes are the most reliable signal, then a pair of tags, then a single tag
-    plus the path, and finally the path alone.
+    The prefix is either a vertical name or the numeric API code standing in for
+    one. A trailing action belongs to neither, and a scope that grants a whole
+    vertical rather than an entity has nothing to contribute.
     """
+    parts = scope.split(".")
+    if len(parts) < 2 or not parts[0]:
+        return None
+    entity_parts = parts[1:-1] if parts[-1] in SCOPE_ACTION_PARTS else parts[1:]
+    if not entity_parts or not any(entity_parts):
+        return None
+    return ScopeParts(prefix=parts[0], entity=slugify(".".join(entity_parts)), depth=len(entity_parts))
+
+
+def classification_from_scopes(path: str, scopes: tuple[str, ...]) -> OperationClassification | None:
+    """Derive (vertical, entity) from the scopes an operation declares.
+
+    A named prefix (`accounting.invoices.read`) is the vertical. The numeric API
+    code that replaces it (`200.invoices.r`) is nothing a user would type, so the
+    name comes from the URL, which spells it the same way the named scopes do.
+    Named prefixes win while the API sends both forms, and reading both through
+    one rule is what keeps a command's name stable when the named form goes away.
+
+    Ranking the entities by how many scopes name them collapses the two- and
+    three-part scopes for one entity together. Several prefixes mean the endpoint
+    is reachable from several verticals (`accounting.datalab`, `pos.datalab`,
+    ...) with none to single out, so we give up and let a less trusted signal
+    classify it.
+    """
+    parsed = [parts for scope in scopes if (parts := split_scope(scope)) is not None]
+    named = [parts for parts in parsed if not is_oneapi_code(parts.prefix)]
+    chosen = named or parsed
+    if not chosen or len({parts.prefix for parts in chosen}) != 1:
+        return None
+    entities: dict[str, tuple[int, int]] = {}
+    for parts in chosen:
+        count, depth = entities.get(parts.entity, (0, 0))
+        entities[parts.entity] = (count + 1, max(depth, parts.depth))
+    return OperationClassification(
+        vertical=slugify(chosen[0].prefix) if named else classification_from_path(path).vertical,
+        entity=min(entities, key=lambda name: (-entities[name][0], -entities[name][1], name)),
+    )
+
+
+def classify_operation(path: str, operation: dict[str, Any], scopes: tuple[str, ...]) -> OperationClassification:
+    """Pick a (vertical, entity) for an operation, most-trusted source first."""
     return (
-        classification_from_scopes(scopes)
+        classification_from_scopes(path, scopes)
         or classification_from_tags(operation)
         or classification_from_single_tag_and_path(path, operation)
         or classification_from_path(path)

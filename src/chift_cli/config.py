@@ -14,6 +14,7 @@ APP_NAME = "chift-cli"
 DEFAULT_API_BASE_URL = "https://api.chift.eu"
 DEFAULT_OPENAPI_PATH = "/openapi.json"
 INTERNAL_ENDPOINTS = {
+    "datastore",
     "datastores",
     "general",
     "issues",
